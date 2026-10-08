@@ -14,7 +14,7 @@ far-wall contours and procedural surface irregularity. Neurons are drawn as z-bu
 ## Install
 
 ```bash
-uv pip install git+https://github.com/peter-grotz/ccf-glass-render.git
+uv pip install git+https://github.com/peter-grotz/single-neuron-reconstruction-visualization.git
 ```
 
 ## Use
