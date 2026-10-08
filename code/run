@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Code Ocean entry point. App Panel parameters arrive as named arguments and
+# are passed straight through to the app.
+set -euo pipefail
+python -u "$(dirname "$0")/app.py" "$@"
