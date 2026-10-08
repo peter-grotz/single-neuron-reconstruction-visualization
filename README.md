@@ -2,15 +2,15 @@
 
 ![support](https://img.shields.io/badge/support-unsupported-red)
 
-Volumetric glass renders of the Allen Mouse Common Coordinate Framework, with
-single-neuron reconstructions inside.
+Glass renders of the Allen Mouse Common Coordinate Framework with single-neuron
+reconstructions inside.
 
-![sagittal and iso views](docs/example.png)
+![sagittal view](docs/example.png)
 
-The brain is shaded as glass — Fresnel mixing of a reflected studio environment
-against a refracted backdrop, with chromatic dispersion, far-wall contours and
-procedural surface irregularity — rather than as a lit solid. Neurons are drawn
-as z-buffered 3D tubes composited over it.
+The brain is shaded as a transparent dielectric — Fresnel mixing of a reflected
+studio environment against a refracted backdrop, with chromatic dispersion,
+far-wall contours and procedural surface irregularity — rather than as a lit
+solid. Neurons are drawn as z-buffered 3D tubes composited over it.
 
 ## Install
 
@@ -20,61 +20,57 @@ uv pip install git+https://github.com/peter-grotz/ccf-glass-render.git
 
 ## Use
 
-Rendering is two stages, because the glass brain does not depend on which cells
-are drawn. Build each camera once, then composite cells onto it in seconds.
+The glass brain is independent of the neurons, so each camera is rendered once
+and cached; figures then composite onto it in seconds.
 
 ```bash
-# once per view: ~13 min and ~10 GB of scratch disk at 10 um
 ccf-render brain --views sagittal,iso --resolution 10
 
-# per figure: seconds
 ccf-render cells \
   --asset s3://aind-open-data/exaSPIM_685221_2024-04-12_11-46-38_reconstructions_2026-08-28_23-04-54 \
   --views sagittal,iso --sample 8 --label LC --out figures/
 ```
 
-`--asset` takes an S3 reconstruction asset or a local directory, and repeats, so
-several subjects can go into one figure. Each run writes PNG + SVG per view and
-a `provenance.json` naming the input assets, the package version and the profile
-digest — the three things needed to regenerate the figure exactly.
-
-### Options worth knowing
+`--asset` accepts an S3 reconstruction asset or a local directory and repeats,
+so several subjects can share a figure. Each run writes PNG and SVG per view,
+plus `provenance.json` recording the input assets, package version and profile
+digest.
 
 | Flag | Effect |
 |---|---|
-| `--compartment axon\|dendrite\|soma` | Render one compartment. Dendrite selections carry the soma. |
-| `--cell N004-685221 --cell …` | Restrict to named cells. |
-| `--sample 8` | Seeded random subset. |
-| `--resolution 20` | Coarser and ~8× faster to build; good for iterating. |
-| `--profile profiles/vivid.toml` | Swap the whole look. |
+| `--compartment axon\|dendrite\|soma` | Restrict to one compartment; dendrite carries the soma |
+| `--cell ID` | Named cells, repeatable |
+| `--sample N` | Seeded random subset |
+| `--resolution` | Pixel size in µm, a multiple of 10 |
+| `--profile FILE` | TOML overriding any shader, palette or geometry constant |
 
 ## Resolution
 
-`--resolution` is the template downsample, so 10 is native. A 10 µm build
-rotates a 1.2-billion-voxel volume; it is memory-mapped rather than held in RAM,
-because holding it resident drives a 19 GB machine into swap and the rotation
-goes from minutes to hours. Expect ~10 GB of scratch disk, freed on completion.
-20 µm needs well under a gigabyte and is the right choice while composing a
-figure.
+`--resolution 10` is the native template sampling; 20 µm is ~8× cheaper and
+adequate while composing a figure. A 10 µm build rotates 1.2 × 10⁹ voxels. The
+occupancy and its rotation (4.8 GB each) are memory-mapped rather than held
+resident, which keeps the resample at minutes instead of hours on a 19 GB
+machine; it needs ~10 GB of scratch disk, released on completion.
 
 ## Reconstruction formats
 
-Two SWC conventions appear in exaSPIM assets and both are read:
+Both exaSPIM SWC conventions are read, distinguished by inspection rather than
+assumption:
 
-- **split** — one file per compartment (`<cell>-axon-<INITIALS>.swc`), with the
-  type column uniformly 0; the compartment comes from the filename.
-- **combined** — one file per cell with real SWC type codes.
+- **split** — one file per compartment (`<cell>-axon-<INITIALS>.swc`), type
+  column uniformly 0, compartment carried by the filename.
+- **combined** — one file per cell with standard SWC type codes.
 
-Reading the type column without sniffing the convention is a silent failure: on
-a split file every node is "undefined" and a compartment filter returns nothing.
+Reading the type column without this check fails silently: every node in a
+split file is "undefined", and a compartment filter returns nothing.
 
 ## Atlas
 
-The 10 µm `average_template` is downloaded from the Allen informatics archive on
-first use, cached under `~/.cache/ccf-glass-render` (override with `CCF_CACHE`),
-and shape-checked — a different atlas or axis order would otherwise produce a
-silently misoriented render. Coordinates are CCF microns; array axes are
-(anterior–posterior, inferior–superior, left–right), midline at z = 5700 µm.
+`average_template_10` is fetched from the Allen informatics archive on first
+use, cached under `~/.cache/ccf-glass-render` (`CCF_CACHE` overrides), and
+shape-checked, since a different atlas or axis order would otherwise yield a
+silently misoriented render. Coordinates are CCF microns on array axes
+(anterior–posterior, inferior–superior, left–right); midline is z = 5700 µm.
 
 ## Development
 
@@ -83,4 +79,4 @@ uv venv && uv pip install -e ".[dev]"
 ruff check . && pytest
 ```
 
-MIT licensed. Not an officially supported Allen Institute product.
+MIT. Not an officially supported Allen Institute product.
