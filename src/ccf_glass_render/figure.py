@@ -13,7 +13,7 @@ import matplotlib.colors as mcolors  # noqa: E402
 import matplotlib.pyplot as plt  # noqa: E402
 
 from . import palettes, splat  # noqa: E402
-from .cache import BrainView  # noqa: E402
+from .cache import BrainView, StructureView  # noqa: E402
 from .profile import RenderProfile, pixel_scale  # noqa: E402
 from .skeletons import Neuron  # noqa: E402
 
@@ -46,7 +46,8 @@ def assign_colours(cell_ids: list[str], profile: RenderProfile) -> dict[str, np.
 def render_cells(brain: BrainView, cells: dict[str, list[Neuron]],
                  profile: RenderProfile,
                  colours: dict[str, np.ndarray] | None = None,
-                 target_um: float | None = None) -> np.ndarray:
+                 target_um: float | None = None,
+                 structures: StructureView | None = None) -> np.ndarray:
     """Composite `cells` onto `brain` and return the RGB image.
 
     Parameters
@@ -55,10 +56,16 @@ def render_cells(brain: BrainView, cells: dict[str, list[Neuron]],
         Output pixel size. Defaults to the brain's own resolution; a finer
         value upscales the cached glass bicubically, which adds no real detail
         and is only worth it when no finer cache exists.
+    structures
+        Optional CCF structure overlay, drawn between the glass and the
+        neurons. Neurons deeper than its near surface are dimmed by its
+        transmittance, so a cell inside a nucleus reads as inside it.
     """
     target_um = target_um or brain.resolution_um
     factor = int(round(brain.resolution_um / target_um)) or 1
     base = splat.smooth_up(brain.base.astype(np.float32), factor)
+    if structures is not None:
+        base = _lay_structure(base, structures, factor)
     height, width = base.shape[:2]
 
     sup = profile.skeleton.supersample
@@ -75,9 +82,21 @@ def render_cells(brain: BrainView, cells: dict[str, list[Neuron]],
                 (splat.densify(pixels, neuron.parent, neuron.node_id,
                                step=max(radius * 0.5, 0.45)), rgb))
 
+    behind = None
+    if structures is not None:
+        behind = (splat.smooth_up_scalar(structures.front, factor) * factor,
+                  splat.smooth_up_scalar(structures.transmittance, factor))
     image = splat.composite(base, items, sup, radius,
-                            profile.skeleton.shade_mix, profile.skeleton.alpha_gain)
+                            profile.skeleton.shade_mix, profile.skeleton.alpha_gain,
+                            behind=behind)
     return np.transpose(image, (1, 0, 2))
+
+
+def _lay_structure(base: np.ndarray, structures: StructureView, factor: int) -> np.ndarray:
+    """Alpha-composite the structure overlay onto the glass brain."""
+    rgb = splat.smooth_up(structures.rgb.astype(np.float32), factor)
+    alpha = splat.smooth_up_scalar(structures.alpha, factor)[..., None]
+    return np.clip(base * (1 - alpha) + rgb * alpha, 0, 1)
 
 
 def save(image: np.ndarray, stem: Path, dpi: int = 300,

@@ -30,7 +30,7 @@ def _package_version() -> str:
 
 def write(path: Path, sources: list[Source], profile: RenderProfile,
           views: list[str], resolution_um: float, cells: list[str],
-          outputs: list[Path]) -> Path:
+          outputs: list[Path], structures: list[str] | None = None) -> Path:
     """Write ``provenance.json`` beside the figures."""
     record = {
         "generated": datetime.now(UTC).isoformat(timespec="seconds"),
@@ -39,6 +39,7 @@ def write(path: Path, sources: list[Source], profile: RenderProfile,
         "profile": {"name": profile.name, "digest": profile.digest()},
         "atlas": {"template": "average_template_10", "resolution_um": resolution_um},
         "views": views,
+        "structures": sorted(structures or []),
         "inputs": [{"uri": s.uri, "asset": s.asset_name, "subject": s.subject,
                     "swc_files": len(s.files)} for s in sources],
         "cells": sorted(cells),

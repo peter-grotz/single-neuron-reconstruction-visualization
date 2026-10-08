@@ -9,7 +9,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from . import palettes, provenance
-from .cache import build_view, load_view
+from .cache import build_structures, build_view, load_structures, load_view
 from .figure import render_cells, save
 from .profile import VIEWS, RenderProfile
 from .skeletons import Compartment, load_cells
@@ -41,6 +41,19 @@ def main(argv: list[str] | None = None) -> int:
     brain.add_argument("--template", type=Path, help="local CCF template, instead of downloading")
     brain.add_argument("--scratch", type=Path, help="scratch directory for the 10 um build")
 
+    struct = sub.add_parser("structures",
+                            help="prerender CCF structures as an overlay for a view")
+    _add_common(struct)
+    struct.add_argument("--structure", action="append", required=True,
+                        help="CCF acronym, e.g. MD, TH, Isocortex; repeatable")
+    struct.add_argument("--colour", "--color", dest="colour",
+                        help="hex colour; defaults to the structure's own CCF colour")
+    struct.add_argument("--opacity", type=float, default=0.55)
+    struct.add_argument("--scratch", type=Path)
+
+    find = sub.add_parser("find", help="search CCF structures by acronym or name")
+    find.add_argument("text")
+
     cells = sub.add_parser("cells", help="render reconstructions into a cached view")
     _add_common(cells)
     cells.add_argument("--asset", action="append", required=True,
@@ -59,10 +72,19 @@ def main(argv: list[str] | None = None) -> int:
                        choices=palettes.names(),
                        help="per-cell colour scheme; overrides the profile. "
                             + "; ".join(f"{k}: {v}" for k, v in palettes.DESCRIPTIONS.items()))
+    cells.add_argument("--thickness", type=float,
+                       help="neuron tube radius in 20 um pixels; overrides the "
+                            "profile (default 1.15, try 2-3 for a thumbnail)")
+    cells.add_argument("--structure", action="append",
+                       help="CCF acronym to show inside the brain, e.g. MD or "
+                            "Isocortex; repeatable. Needs a cached overlay")
     cells.add_argument("--pad", type=int, default=48,
                        help="margin in pixels around the rendered extent")
 
     args = parser.parse_args(argv)
+    if args.command == "find":
+        return _find(args.text)
+
     views = [v.strip() for v in args.views.split(",") if v.strip()]
     profile = _profile(args.profile)
     if getattr(args, "colors", None):
@@ -71,13 +93,51 @@ def main(argv: list[str] | None = None) -> int:
             profile,
             skeleton=replace(profile.skeleton, scheme=args.colors, palette=()))
 
-    if args.command == "brain":
-        for view in views:
-            build_view(view, args.resolution, profile, root=args.cache,
-                       scratch=args.scratch, template=args.template)
-        return 0
+    if getattr(args, "thickness", None):
+        profile = replace(
+            profile, skeleton=replace(profile.skeleton, thickness=args.thickness))
 
-    return _render_cells(args, views, profile)
+    try:
+        if args.command == "brain":
+            for view in views:
+                build_view(view, args.resolution, profile, root=args.cache,
+                           scratch=args.scratch, template=args.template)
+            return 0
+
+        if args.command == "structures":
+            for view in views:
+                build_structures(view, args.resolution, _split(args.structure),
+                                 colour=args.colour, opacity=args.opacity,
+                                 root=args.cache, scratch=args.scratch)
+            return 0
+    except (FileNotFoundError, KeyError, ValueError) as exc:
+        print(f"error: {exc.args[0] if exc.args else exc}", file=sys.stderr)
+        return 2
+
+    try:
+        return _render_cells(args, views, profile)
+    except (FileNotFoundError, KeyError, ValueError) as exc:
+        # these carry an actionable message; a traceback only buries it
+        print(f"error: {exc.args[0] if exc.args else exc}", file=sys.stderr)
+        return 2
+
+
+def _split(values: list[str]) -> list[str]:
+    """Accept both repeated flags and one comma separated value."""
+    return [v.strip() for value in values for v in value.split(",") if v.strip()]
+
+
+def _find(text: str) -> int:
+    """Print CCF structures matching `text`."""
+    from . import structures as st
+
+    found = st.search(text)
+    if not found:
+        print(f"no CCF structure matches {text!r}", file=sys.stderr)
+        return 1
+    for s in found:
+        print(f"{s.acronym:14s} {s.colour}  {s.name}")
+    return 0
 
 
 def _render_cells(args, views: list[str], profile: RenderProfile) -> int:
@@ -101,16 +161,19 @@ def _render_cells(args, views: list[str], profile: RenderProfile) -> int:
         return 2
     print(f"{len(cells)} cells: {sorted(cells)}", flush=True)
 
+    wanted = _split(args.structure) if args.structure else []
     written = []
     for view in views:
         brain = load_view(view, args.resolution, root=args.cache)
-        image = render_cells(brain, cells, profile)
+        overlay = (load_structures(view, args.resolution, wanted, root=args.cache)
+                   if wanted else None)
+        image = render_cells(brain, cells, profile, structures=overlay)
         stem = args.out / f"{args.label}_{view}"
         written += save(image, stem, dpi=args.dpi, pad=args.pad)
         print(f"  {view}  {image.shape[1]} x {image.shape[0]}", flush=True)
 
     provenance.write(args.out / "provenance.json", sources, profile, views,
-                     args.resolution, list(cells), written)
+                     args.resolution, list(cells), written, structures=wanted)
     print(f"wrote {args.out}", flush=True)
     return 0
 

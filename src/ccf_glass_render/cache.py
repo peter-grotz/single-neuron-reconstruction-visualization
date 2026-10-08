@@ -154,3 +154,128 @@ def build_view(view: str, resolution_um: float, profile: RenderProfile,
     print(f"  cached {path}  base {base.shape[:2]}  "
           f"{path.stat().st_size / 1e6:.0f} MB", flush=True)
     return path
+
+
+@dataclass(frozen=True)
+class StructureView:
+    """A prerendered CCF structure in the same frame as a :class:`BrainView`.
+
+    Attributes
+    ----------
+    rgb, alpha
+        Premultiplied-ready colour and coverage of the structure's near surface.
+    front
+        Depth of the near surface in view pixels, or +inf where it is absent.
+        Neurons deeper than this sit behind the structure.
+    transmittance
+        Fraction of a neuron's colour that survives being seen through the
+        structure, from Beer-Lambert absorption along its thickness.
+    """
+
+    rgb: np.ndarray
+    alpha: np.ndarray
+    front: np.ndarray
+    transmittance: np.ndarray
+    acronyms: tuple[str, ...]
+    view: str
+    resolution_um: float
+
+
+def structure_cache_path(view: str, resolution_um: float, acronyms: list[str],
+                         root: Path | None = None) -> Path:
+    """Location of a cached structure overlay; the name encodes its contents."""
+    base = Path(root) if root else atlas.cache_dir() / "views"
+    base.mkdir(parents=True, exist_ok=True)
+    tag = "-".join(sorted(acronyms))
+    return base / f"{view}_{int(resolution_um)}um_struct_{tag}.npz"
+
+
+def load_structures(view: str, resolution_um: float, acronyms: list[str],
+                    root: Path | None = None) -> StructureView:
+    """Read a cached structure overlay, or say how to build it."""
+    path = structure_cache_path(view, resolution_um, acronyms, root)
+    if not path.exists():
+        names = ",".join(sorted(acronyms))
+        raise FileNotFoundError(
+            f"no cached overlay for {names} in view={view} at "
+            f"{int(resolution_um)} um. Build it with: ccf-render structures "
+            f"--structure {names} --views {view} --resolution {int(resolution_um)}")
+    z = np.load(path)
+    return StructureView(
+        rgb=z["rgb"], alpha=z["alpha"], front=z["front"],
+        transmittance=z["transmittance"], acronyms=tuple(z["acronyms"]),
+        view=str(z["view"]), resolution_um=float(z["resolution_um"]))
+
+
+def build_structures(view: str, resolution_um: float, acronyms: list[str],
+                     colour: str | None = None, opacity: float = 0.55,
+                     root: Path | None = None, scratch: Path | None = None) -> Path:
+    """Render CCF structures in `view` and cache them as an overlay.
+
+    The structure is shaded as a soft translucent solid rather than as glass:
+    it sits inside the brain, so a second full dielectric treatment makes the
+    two surfaces compete and neither reads.
+    """
+    from matplotlib.colors import to_rgb
+
+    from . import structures as st
+
+    if view not in VIEWS:
+        raise ValueError(f"unknown view {view!r}; choose from {sorted(VIEWS)}")
+    down = int(round(resolution_um / atlas.VOXEL_UM))
+    scratch = Path(scratch) if scratch else atlas.cache_dir() / "scratch"
+    yaw, pitch = VIEWS[view]
+
+    print(f"[{view}] structure mask for {sorted(acronyms)} at "
+          f"{int(resolution_um)} um", flush=True)
+    field = st.mask(acronyms, down)
+
+    rot, centre_in, centre_out, out_shape = atlas.build_affine(field.shape, yaw, pitch)
+    pad = max(int(PAD_FRACTION * out_shape[1]), 12)
+    vol = _memmap(scratch, "structure", (out_shape[0], out_shape[1] + pad, out_shape[2]))
+    atlas.rotate(field, rot, centre_in, centre_out, out_shape,
+                 out=vol[:, : out_shape[1], :])
+    vol.flush()
+    del field
+    gc.collect()
+
+    tint = np.asarray(to_rgb(colour or st.default_colour(acronyms)), np.float32)
+    overlay = _shade_structure(vol, tint, opacity, resolution_um,
+                               pixel_scale(resolution_um))
+    del vol
+    gc.collect()
+    shutil.rmtree(scratch, ignore_errors=True)
+
+    path = structure_cache_path(view, resolution_um, acronyms, root)
+    np.savez_compressed(path, acronyms=np.array(sorted(acronyms)), view=view,
+                        resolution_um=np.float32(resolution_um), **overlay)
+    print(f"  cached {path}  {path.stat().st_size / 1e6:.1f} MB", flush=True)
+    return path
+
+
+def _shade_structure(field: np.ndarray, tint: np.ndarray, opacity: float,
+                     voxel_um: float, scale: float) -> dict[str, np.ndarray]:
+    """Soft shading of a structure's near surface, plus its depth and opacity."""
+    height, width, depth = field.shape
+    thickness_mm = field.sum(axis=2) * voxel_um / 1000.0
+    inside = field > 0.5
+    hit = inside.any(axis=2)
+    first = np.argmax(inside, axis=2).astype(np.float32)
+    del inside
+
+    rows, cols = np.meshgrid(np.arange(height), np.arange(width), indexing="ij")
+    peak = field.max(axis=2)
+    coverage = ndi.gaussian_filter(np.clip((peak - 0.3) / 0.35, 0, 1) * hit, 0.8 * scale)
+
+    # shape reads from a shallow relief of the near surface rather than a full
+    # normal solve; the structure is a secondary cue, not the subject
+    relief = ndi.gaussian_filter(np.where(hit, first, np.nan_to_num(first.max())), 1.5 * scale)
+    d_row, d_col = np.gradient(relief)
+    lit = np.clip(0.72 + 0.9 * (-0.5 * d_row - 0.3 * d_col) / (1.0 + scale), 0.45, 1.25)
+
+    rgb = np.clip(tint[None, None, :] * lit[..., None], 0, 1).astype(np.float32)
+    alpha = (coverage * opacity).astype(np.float32)
+    front = np.where(hit, first, np.inf).astype(np.float32)
+    # a neuron seen through the structure keeps this much of its colour
+    transmittance = np.exp(-1.6 * opacity * thickness_mm).astype(np.float32)
+    return {"rgb": rgb, "alpha": alpha, "front": front, "transmittance": transmittance}

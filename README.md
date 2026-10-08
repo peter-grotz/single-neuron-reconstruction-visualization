@@ -42,6 +42,8 @@ digest.
 | `--sample N` | Seeded random subset |
 | `--resolution` | Pixel size in µm, a multiple of 10 |
 | `--colors NAME` | Per-cell colour scheme (below) |
+| `--thickness N` | Tube radius in 20 µm pixels; default 1.15 |
+| `--structure ACR` | Show a CCF structure inside the brain (below) |
 | `--profile FILE` | TOML overriding any shader, palette or geometry constant |
 
 ## Colour schemes
@@ -60,6 +62,43 @@ the white glass; pale hues disappear on it.
 Fixed schemes cap a figure at their length and raise rather than reusing a hue
 on two cells; the generated schemes size themselves to the selection. A profile
 may instead give `palette` as explicit hex values, which overrides the scheme.
+
+The same eight cells under each scheme:
+
+![colour schemes](docs/colour_schemes.png)
+
+`viridis` is included because it is asked for, but it is perceptually ordered,
+so adjacent cells land on adjacent hues and are hard to tell apart. For
+categorical work prefer `vivid`, `allen` or `okabe-ito`.
+
+## Line weight
+
+`--thickness` is the tube radius in 20 µm pixels, held constant in apparent
+size as resolution changes. The default of 1.15 suits a full-page figure; 2–3
+reads better in a thumbnail or a slide, where thin processes otherwise drop out
+at display size.
+
+```bash
+ccf-render cells --asset … --thickness 2.5 --sample 4
+```
+
+## CCF structures
+
+`--structure` draws a labelled region inside the glass, so projections can be
+read against anatomy. Structures take their official CCF colour unless given
+one, and a parent acronym expands to all its descendants — `TH` is the union of
+74 thalamic labels, not the handful of voxels tagged 549 itself.
+
+```bash
+ccf-render find thalamus                 # search acronyms and names
+ccf-render structures --structure MD --views sagittal --resolution 10
+ccf-render cells --asset … --structure MD
+```
+
+Overlays are cached per view, resolution and structure set, independently of
+the brain, so adding a region does not rebuild the glass. Neurons deeper than a
+structure's near surface are attenuated by its thickness, so a cell inside a
+nucleus reads as inside rather than painted over it.
 
 ## Resolution
 

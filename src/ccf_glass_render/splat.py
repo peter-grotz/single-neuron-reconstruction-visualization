@@ -137,16 +137,46 @@ def crop(image: np.ndarray, pad: int, background: float = 0.995) -> np.ndarray:
 
 
 def composite(base: np.ndarray, items, supersample: int, radius: float,
-              shade_mix: float, alpha_gain: float) -> np.ndarray:
-    """Splat `items` over `base` and return the combined image."""
+              shade_mix: float, alpha_gain: float,
+              behind: tuple[np.ndarray, np.ndarray] | None = None) -> np.ndarray:
+    """Splat `items` over `base` and return the combined image.
+
+    Parameters
+    ----------
+    behind
+        Optional ``(front_depth, transmittance)`` of an occluding structure, in
+        output pixels. Splatted points deeper than `front_depth` are faded
+        toward the structure's own colour by `transmittance`, so a branch
+        passing behind a nucleus is dimmed rather than drawn over it.
+    """
     height, width = base.shape[:2]
-    _, normal, colour, mask = splat(items, (height * supersample, width * supersample), radius)
+    depth, normal, colour, mask = splat(
+        items, (height * supersample, width * supersample), radius)
     lit = shade(normal, colour, mask)
     lit = np.clip(shade_mix * lit + (1.0 - shade_mix) * colour * mask[..., None], 0, 1)
     rgb = box_down(lit, supersample)
     alpha = np.clip(box_down(mask.astype(np.float32), supersample)[..., None] * alpha_gain, 0, 1)
+    if behind is not None:
+        front, transmittance = behind
+        occluded = box_down(
+            (depth > np.repeat(np.repeat(front, supersample, 0),
+                               supersample, 1)).astype(np.float32),
+            supersample)
+        fade = 1.0 - occluded * (1.0 - transmittance)
+        alpha = alpha * fade[..., None]
     over = np.where(alpha > 0, rgb / np.maximum(alpha, 1e-6), 0)
     return np.clip(base * (1 - alpha) + over * alpha, 0, 1)
+
+
+def smooth_up_scalar(image: np.ndarray, factor: int) -> np.ndarray:
+    """Bilinear upscale of a single-channel map; +inf survives as +inf."""
+    if factor == 1:
+        return image
+    finite = np.isfinite(image)
+    filled = np.where(finite, image, 0.0)
+    up = ndi.zoom(filled, factor, order=1)
+    keep = ndi.zoom(finite.astype(np.float32), factor, order=0) > 0.5
+    return np.where(keep, up, np.inf)
 
 
 def smooth_up(image: np.ndarray, factor: int) -> np.ndarray:
