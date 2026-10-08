@@ -9,8 +9,7 @@ reconstructions inside.
 
 The brain is shaded as a transparent dielectric — Fresnel mixing of a reflected
 studio environment against a refracted backdrop, with chromatic dispersion,
-far-wall contours and procedural surface irregularity — rather than as a lit
-solid. Neurons are drawn as z-buffered 3D tubes composited over it.
+far-wall contours and procedural surface irregularity. Neurons are drawn as z-buffered 3D tubes composited over it.
 
 ## Install
 
@@ -20,7 +19,7 @@ uv pip install git+https://github.com/peter-grotz/ccf-glass-render.git
 
 ## Use
 
-The glass brain is independent of the neurons, so each camera is rendered once
+Each camera is rendered once
 and cached; figures then composite onto it in seconds.
 
 ```bash
