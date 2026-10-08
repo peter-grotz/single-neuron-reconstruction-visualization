@@ -12,26 +12,30 @@ matplotlib.use("Agg")
 import matplotlib.colors as mcolors  # noqa: E402
 import matplotlib.pyplot as plt  # noqa: E402
 
-from . import splat  # noqa: E402
+from . import palettes, splat  # noqa: E402
 from .cache import BrainView  # noqa: E402
 from .profile import RenderProfile, pixel_scale  # noqa: E402
 from .skeletons import Neuron  # noqa: E402
 
 
 def assign_colours(cell_ids: list[str], profile: RenderProfile) -> dict[str, np.ndarray]:
-    """One palette colour per cell, sampled without replacement.
+    """One colour per cell, drawn from the profile's scheme without replacement.
 
     Sampling *with* replacement silently collides -- an eight-cell draw once
     produced the same hue three times -- so this raises instead of shipping a
     figure where two cells are indistinguishable.
     """
-    palette = list(profile.skeleton.palette)
-    if len(cell_ids) > len(palette):
-        raise ValueError(
-            f"{len(cell_ids)} cells but only {len(palette)} palette entries; "
-            "extend the profile palette or render fewer cells per figure"
-        )
-    chosen = random.Random(profile.skeleton.seed).sample(palette, len(cell_ids))
+    skeleton = profile.skeleton
+    if skeleton.palette:
+        pool = list(skeleton.palette)
+        if len(cell_ids) > len(pool):
+            raise ValueError(
+                f"{len(cell_ids)} cells but only {len(pool)} colours in the "
+                "profile palette; extend it or render fewer cells per figure"
+            )
+    else:
+        pool = palettes.palette(skeleton.scheme, len(cell_ids))
+    chosen = random.Random(skeleton.seed).sample(pool, len(cell_ids))
     out = {c: np.array(mcolors.to_rgb(k), np.float32)
            for c, k in zip(cell_ids, chosen, strict=True)}
     if len({tuple(v) for v in out.values()}) != len(out):

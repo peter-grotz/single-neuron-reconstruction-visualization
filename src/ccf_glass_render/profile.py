@@ -74,11 +74,10 @@ class SkeletonProfile:
     """Weight of lit shading vs flat colour; 0 is wholly flat."""
     alpha_gain: float = 1.5
     seed: int = 3
-    palette: tuple[str, ...] = (
-        "#d4188c", "#8c3fe0", "#2b55e0", "#1f8fe5",
-        "#11a88e", "#2fa814", "#e07b00", "#e01f33",
-    )
-    """Mid-lightness, high-chroma hues; dark palettes read muddy at this weight."""
+    scheme: str = "vivid"
+    """Named colour scheme; see :mod:`ccf_glass_render.palettes`."""
+    palette: tuple[str, ...] = ()
+    """Explicit hex colours, overriding `scheme` when non-empty."""
 
 
 @dataclass(frozen=True)

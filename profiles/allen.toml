@@ -1,0 +1,9 @@
+# Allen Institute brand primaries and accents.
+name = "allen"
+
+[skeleton]
+scheme = "allen"
+thickness = 1.15
+supersample = 3
+shade_mix = 0.38
+seed = 3

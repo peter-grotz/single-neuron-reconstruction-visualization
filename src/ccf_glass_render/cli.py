@@ -5,9 +5,10 @@ from __future__ import annotations
 import argparse
 import random
 import sys
+from dataclasses import replace
 from pathlib import Path
 
-from . import provenance
+from . import palettes, provenance
 from .cache import build_view, load_view
 from .figure import render_cells, save
 from .profile import VIEWS, RenderProfile
@@ -54,12 +55,21 @@ def main(argv: list[str] | None = None) -> int:
     cells.add_argument("--sample", type=int, help="render a random subset of this many cells")
     cells.add_argument("--label", default="cells", help="filename prefix")
     cells.add_argument("--dpi", type=int, default=300)
+    cells.add_argument("--colors", "--colours", dest="colors",
+                       choices=palettes.names(),
+                       help="per-cell colour scheme; overrides the profile. "
+                            + "; ".join(f"{k}: {v}" for k, v in palettes.DESCRIPTIONS.items()))
     cells.add_argument("--pad", type=int, default=48,
                        help="margin in pixels around the rendered extent")
 
     args = parser.parse_args(argv)
     views = [v.strip() for v in args.views.split(",") if v.strip()]
     profile = _profile(args.profile)
+    if getattr(args, "colors", None):
+        # an explicit flag beats the profile, and clears any literal palette
+        profile = replace(
+            profile,
+            skeleton=replace(profile.skeleton, scheme=args.colors, palette=()))
 
     if args.command == "brain":
         for view in views:

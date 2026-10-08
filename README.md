@@ -41,7 +41,25 @@ digest.
 | `--cell ID` | Named cells, repeatable |
 | `--sample N` | Seeded random subset |
 | `--resolution` | Pixel size in µm, a multiple of 10 |
+| `--colors NAME` | Per-cell colour scheme (below) |
 | `--profile FILE` | TOML overriding any shader, palette or geometry constant |
+
+## Colour schemes
+
+`--colors` sets how cells are coloured. Every scheme is chosen to read against
+the white glass; pale hues disappear on it.
+
+| Scheme | |
+|---|---|
+| `vivid` | high-chroma hues around the circle (default) |
+| `allen` | Allen Institute brand primaries and accents |
+| `okabe-ito` | colour-vision-deficiency safe |
+| `tab10`, `set1`, `dark2` | matplotlib default and two ColorBrewer qualitative sets |
+| `dark`, `husl`, `viridis`, `turbo` | generated for any cell count |
+
+Fixed schemes cap a figure at their length and raise rather than reusing a hue
+on two cells; the generated schemes size themselves to the selection. A profile
+may instead give `palette` as explicit hex values, which overrides the scheme.
 
 ## Resolution
 

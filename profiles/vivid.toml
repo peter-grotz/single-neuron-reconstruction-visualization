@@ -1,11 +1,9 @@
-# Mid-lightness, high-chroma per-cell colours; the look used for the
-# 5HT vs LC-NE comparison figures.
+# Default look: high-chroma hues spread around the colour circle.
 name = "vivid"
 
 [skeleton]
+scheme = "vivid"
 thickness = 1.15
 supersample = 3
 shade_mix = 0.38
 seed = 3
-palette = ["#d4188c", "#8c3fe0", "#2b55e0", "#1f8fe5",
-           "#11a88e", "#2fa814", "#e07b00", "#e01f33"]
