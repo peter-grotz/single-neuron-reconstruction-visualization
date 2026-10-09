@@ -199,7 +199,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--resolution", type=float, default=10.0)
     parser.add_argument("--colors", default="")
     parser.add_argument("--thickness", type=float, default=0.0)
-    parser.add_argument("--compartment", default="all")
+    # the panel may name this cell_morphology_type; both spellings bind here so
+    # renaming the App Panel parameter cannot silently stop reaching the script
+    parser.add_argument("--compartment", "--cell-morphology-type",
+                        "--cell_morphology_type", dest="compartment", default="all")
     parser.add_argument("--structure", default="")
     parser.add_argument("--cells", default="")
     parser.add_argument("--sample", type=int, default=0)
