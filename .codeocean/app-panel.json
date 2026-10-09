@@ -30,8 +30,8 @@
 			"value_type": "string",
 			"default_value": "saggital+iso",
 			"extra_data": [
-				"sagittal+coronal+horizontal+iso",
-				"sagittal+coronal+horizontal",
+				"saggittal+coronal+horizontal+iso",
+				"saggittal+coronal+horizontal",
 				"saggital+iso",
 				"saggital",
 				"iso",
