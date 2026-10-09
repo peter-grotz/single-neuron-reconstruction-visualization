@@ -18,10 +18,24 @@ import numpy as np
 # Camera angles in (yaw, pitch) degrees, applied to the CCF array axes.
 VIEWS: dict[str, tuple[float, float]] = {
     "sagittal": (0.0, 0.0),
-    "iso": (-38.0, 20.0),
-    "dorsal": (0.0, 90.0),
     "coronal": (90.0, 0.0),
+    "horizontal": (0.0, 90.0),
+    "iso": (-38.0, 20.0),
 }
+"""The three anatomical planes, plus a three-quarter view."""
+
+VIEW_ALIASES: dict[str, str] = {"dorsal": "horizontal", "axial": "horizontal",
+                                "transverse": "horizontal", "lateral": "sagittal"}
+"""`dorsal` was the earlier name for the horizontal plane; both still resolve."""
+
+
+def canonical_view(name: str) -> str:
+    """Resolve a view name or alias, or say what the choices are."""
+    key = name.strip().lower()
+    key = VIEW_ALIASES.get(key, key)
+    if key not in VIEWS:
+        raise ValueError(f"unknown view {name!r}; choose from {sorted(VIEWS)}")
+    return key
 
 
 @dataclass(frozen=True)

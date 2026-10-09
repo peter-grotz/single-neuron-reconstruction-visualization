@@ -43,7 +43,7 @@ Pass only the reconstruction assets:
 
 | | |
 |---|---|
-| views | `sagittal`, `iso` |
+| views | `sagittal`, `iso` (add `coronal`, `horizontal` with a `build_cache` run) |
 | resolution | 10 µm |
 | structures | `TH`, `MD`, `Isocortex`, `CP` |
 
@@ -83,7 +83,7 @@ wherever a field takes several values.
 | Name | Type | Default | Notes |
 |---|---|---|---|
 | `mode` | list | `render` | `render`, `build_cache` |
-| `views` | list | `sagittal+iso` | `sagittal+iso`, `sagittal`, `iso`. Add `coronal`/`dorsal` only after caching them |
+| `views` | list | `sagittal+iso` | `sagittal+iso`, `sagittal`, `iso`, `coronal`, `horizontal`. Each needs a cached view |
 | `resolution` | list | `10` | `10` only, until a 20 µm cache exists. A list, not free text |
 | `colors` | list | `vivid` | `vivid`, `allen`, `okabe-ito`, `tab10`, `set1`, `dark2`, `dark`, `husl`, `viridis`, `turbo`. Fixed schemes cycle past their length; `dark`/`husl`/`viridis`/`turbo` give every cell a unique colour |
 | `thickness` | input | blank | Tube radius in 20 µm pixels; blank means 1.15 |

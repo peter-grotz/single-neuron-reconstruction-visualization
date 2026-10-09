@@ -23,7 +23,7 @@ from scipy import ndimage as ndi
 
 from . import atlas
 from .glass import render_glass
-from .profile import VIEWS, GlassProfile, RenderProfile, pixel_scale
+from .profile import VIEWS, GlassProfile, RenderProfile, canonical_view, pixel_scale
 
 PAD_FRACTION = 0.10
 """Headroom added below the object, as a fraction of its height."""
@@ -52,10 +52,10 @@ class BrainView:
 
 
 def cache_path(view: str, resolution_um: float, root: Path | None = None) -> Path:
-    """Location of the cached view."""
+    """Location of the cached view; aliases resolve to the canonical name."""
     base = Path(root) if root else atlas.cache_dir() / "views"
     base.mkdir(parents=True, exist_ok=True)
-    return base / f"{view}_{int(resolution_um)}um.npz"
+    return base / f"{canonical_view(view)}_{int(resolution_um)}um.npz"
 
 
 def load_view(view: str, resolution_um: float, root: Path | None = None) -> BrainView:
@@ -107,8 +107,7 @@ def build_view(view: str, resolution_um: float, profile: RenderProfile,
                root: Path | None = None, scratch: Path | None = None,
                template: Path | None = None) -> Path:
     """Render one glass view and cache it. Returns the cache path."""
-    if view not in VIEWS:
-        raise ValueError(f"unknown view {view!r}; choose from {sorted(VIEWS)}")
+    view = canonical_view(view)
     down = int(round(resolution_um / atlas.VOXEL_UM))
     if down < 1 or abs(down * atlas.VOXEL_UM - resolution_um) > 1e-6:
         raise ValueError(f"resolution must be a multiple of {atlas.VOXEL_UM} um")
@@ -187,7 +186,7 @@ def structure_cache_path(view: str, resolution_um: float, acronyms: list[str],
     base = Path(root) if root else atlas.cache_dir() / "views"
     base.mkdir(parents=True, exist_ok=True)
     tag = "-".join(sorted(acronyms))
-    return base / f"{view}_{int(resolution_um)}um_struct_{tag}.npz"
+    return base / f"{canonical_view(view)}_{int(resolution_um)}um_struct_{tag}.npz"
 
 
 def load_structures(view: str, resolution_um: float, acronyms: list[str],
@@ -220,8 +219,7 @@ def build_structures(view: str, resolution_um: float, acronyms: list[str],
 
     from . import structures as st
 
-    if view not in VIEWS:
-        raise ValueError(f"unknown view {view!r}; choose from {sorted(VIEWS)}")
+    view = canonical_view(view)
     down = int(round(resolution_um / atlas.VOXEL_UM))
     scratch = Path(scratch) if scratch else atlas.cache_dir() / "scratch"
     yaw, pitch = VIEWS[view]

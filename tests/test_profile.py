@@ -4,11 +4,14 @@ from __future__ import annotations
 
 from dataclasses import replace
 
+import pytest
+
 from ccf_glass_render.profile import (
     VIEWS,
     GlassProfile,
     RenderProfile,
     SkeletonProfile,
+    canonical_view,
     pixel_scale,
 )
 
@@ -43,5 +46,21 @@ def test_pixel_scale_is_one_at_twenty_microns():
     assert pixel_scale(10.0) == 2.0
 
 
-def test_views_are_the_documented_four():
-    assert set(VIEWS) == {"sagittal", "iso", "dorsal", "coronal"}
+def test_views_are_the_three_planes_plus_iso():
+    assert set(VIEWS) == {"sagittal", "coronal", "horizontal", "iso"}
+
+
+@pytest.mark.parametrize(
+    ("given", "expected"),
+    [("horizontal", "horizontal"), ("dorsal", "horizontal"), ("axial", "horizontal"),
+     ("transverse", "horizontal"), ("lateral", "sagittal"), ("Coronal", "coronal"),
+     (" iso ", "iso")],
+)
+def test_aliases_and_case_resolve(given, expected):
+    """`dorsal` was the earlier name for the horizontal plane; it still works."""
+    assert canonical_view(given) == expected
+
+
+def test_unknown_view_names_the_choices():
+    with pytest.raises(ValueError, match="choose from"):
+        canonical_view("oblique")

@@ -106,6 +106,10 @@ nucleus reads as inside rather than painted over it.
 
 ## Resolution
 
+Views are the three anatomical planes -- `sagittal`, `coronal`, `horizontal` --
+plus `iso`, a three-quarter view. `dorsal`, `axial` and `transverse` are
+accepted as aliases of `horizontal`, and `lateral` of `sagittal`.
+
 `--resolution 10` is the native template sampling; 20 µm is ~8× cheaper and
 adequate while composing a figure. A 10 µm build rotates 1.2 × 10⁹ voxels. The
 occupancy and its rotation (4.8 GB each) are memory-mapped rather than held
