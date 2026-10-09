@@ -22,11 +22,35 @@ Measured on this capsule, runs `f729af51` and `645ec55d`.
 
 `ccf_glass_render_cache_10um` — `714793b5-0772-46bb-aa13-c2e55f06a29f`, 11 files,
 38 MB. Holds sagittal and iso at 10 µm plus `TH`, `MD`, `Isocortex` and `CP`
-overlays for each. **Attach it with mount name `ccf_cache`.**
+overlays for each.
 
-The app finds it by that mount name, or by any mount containing a `views/`
-directory. Without it the capsule still runs, building the views in-process and
-saying so in the log — slow, but never silently so.
+It is **attached to the capsule**, with mount name `ccf_cache`, so every run
+gets it and viewers do not have to know it exists. The app finds it by that
+mount name, or by any mount containing a `views/` directory. Without it the
+capsule still runs, building the views in-process and saying so in the log —
+slow, but never silently so.
+
+Because it is attached at the capsule level, an API launch must **not** repeat
+it in `data_assets`; doing so is rejected with `data asset already attached`.
+Pass only the reconstruction assets:
+
+```json
+{"capsule_id": "26f5aa46-1c66-45b1-812b-a9bad1335ee9",
+ "named_parameters": [{"param_name": "sample", "value": "8"}]}
+```
+
+## What the cache covers
+
+| | |
+|---|---|
+| views | `sagittal`, `iso` |
+| resolution | 10 µm |
+| structures | `TH`, `MD`, `Isocortex`, `CP` |
+
+Anything outside this raises an error naming the `build_cache` run that would
+produce it. Keep the App Panel's `views` and `resolution` choices inside this
+set, or extend the cache first — otherwise a viewer can pick a combination that
+cannot run.
 
 To rebuild or extend it, run with `mode = build_cache` and no data assets
 attached, then create a data asset from the run:
@@ -52,12 +76,12 @@ breaking existing runs.
 | Name | Type | Default | Notes |
 |---|---|---|---|
 | `mode` | list | `render` | `render`, `build_cache` |
-| `views` | list | `sagittal,iso` | `sagittal`, `iso`, `coronal`, `dorsal`, `sagittal,iso` |
-| `resolution` | list | `10` | `10`, `20`. A list, not free text — anything but a multiple of 10 is rejected |
+| `views` | list | `sagittal,iso` | `sagittal`, `iso`, `sagittal,iso`. Add `coronal`/`dorsal` only after caching them |
+| `resolution` | list | `10` | `10` only, until a 20 µm cache exists. A list, not free text |
 | `colors` | list | blank | `vivid`, `allen`, `okabe-ito`, `tab10`, `set1`, `dark2`, `dark`, `husl`, `viridis`, `turbo` |
 | `thickness` | input | blank | Tube radius in 20 µm pixels; blank means 1.15 |
 | `compartment` | list | `all` | `all`, `axon`, `dendrite`, `soma` |
-| `structure` | input | blank | CCF acronyms, comma separated; needs a cached overlay |
+| `structure` | input | blank | CCF acronyms, comma separated. Only `TH`, `MD`, `Isocortex`, `CP` are cached |
 | `sample` | input | blank | Seeded random subset |
 | `cells` | input | blank | Explicit ids, comma separated |
 | `seed` | input | blank | Changes the colour assignment |
