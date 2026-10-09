@@ -1,0 +1,120 @@
+{
+	"version": 1,
+	"datasets": [
+		{
+			"id": "7ad6a512-9eac-4cc3-a158-943cbe5b0412",
+			"name": "Reconstructions",
+			"description": "CCF-space single-neuron reconstructions. Swap for another subject.",
+			"help_text": "Any exaSPIM reconstruction asset containing ccf_space_reconstructions/swcs."
+		}
+	],
+	"categories": [
+		{
+			"id": "8uUohbZGHYVjwv1R",
+			"name": "Cell Selection",
+			"description": "Which cells, and how they’re colored",
+			"icon": "🔬"
+		},
+		{
+			"id": "vwWyT7KnBCPHkmVb",
+			"name": "Anatomy",
+			"icon": "🧠"
+		}
+	],
+	"parameters": [
+		{
+			"id": "oxBpVLPKZs5yXTgY",
+			"category": "8uUohbZGHYVjwv1R",
+			"name": "Views",
+			"type": "list",
+			"value_type": "string",
+			"default_value": "saggital+iso",
+			"extra_data": [
+				"sagittal+coronal+horizontal+iso",
+				"sagittal+coronal+horizontal",
+				"saggital+iso",
+				"saggital",
+				"iso",
+				"coronal",
+				"horizontal"
+			]
+		},
+		{
+			"id": "soFSIOiALPCu5hTd",
+			"category": "8uUohbZGHYVjwv1R",
+			"name": "Color Scheme",
+			"type": "list",
+			"value_type": "string",
+			"default_value": "vivid",
+			"extra_data": [
+				"vivid",
+				"allen",
+				"okabe-ito",
+				"tab10",
+				"set1",
+				"dark2",
+				"dark",
+				"husl",
+				"viridis",
+				"turbo"
+			]
+		},
+		{
+			"id": "oDAUsLMj2QMQrhlY",
+			"category": "8uUohbZGHYVjwv1R",
+			"name": "Line Thickness",
+			"type": "text",
+			"value_type": "number",
+			"default_value": "1.15",
+			"minimum": 0.01,
+			"maximum": 50
+		},
+		{
+			"id": "r2B3Ke1r9ucjC2kh",
+			"category": "8uUohbZGHYVjwv1R",
+			"name": "Sample N cells",
+			"description": "# cells you'd like to randomly sample from the asset",
+			"type": "text",
+			"value_type": "integer",
+			"default_value": "8"
+		},
+		{
+			"id": "8UMWj0UZ5InPh04c",
+			"category": "8uUohbZGHYVjwv1R",
+			"name": "Cell ID",
+			"description": "Specific cell ID you would like to visualize",
+			"type": "text",
+			"value_type": "string"
+		},
+		{
+			"id": "qyyyEj4ZT9PbyJHE",
+			"category": "vwWyT7KnBCPHkmVb",
+			"name": "Cell Morphology Type",
+			"description": "which portion of the cell you'd like to visualize",
+			"type": "list",
+			"value_type": "string",
+			"default_value": "all",
+			"extra_data": [
+				"all",
+				"axon",
+				"dendrite",
+				"soma"
+			]
+		},
+		{
+			"id": "jgrqENZklbK7hrlW",
+			"category": "vwWyT7KnBCPHkmVb",
+			"name": "CCF Structure",
+			"description": "allenID of the ccf structure you'd like to visualize within the render",
+			"type": "text",
+			"value_type": "string"
+		},
+		{
+			"id": "breEMLfKkRN36Bfk",
+			"name": "Color seed",
+			"type": "text",
+			"value_type": "integer",
+			"default_value": "3"
+		}
+	]
+}
