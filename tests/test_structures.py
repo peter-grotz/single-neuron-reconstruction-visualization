@@ -58,3 +58,20 @@ def test_search_finds_by_name():
 
 def test_default_colour_follows_the_first_structure():
     assert structures.default_colour(["MD", "TH"]) == structures.lookup("MD").colour
+
+
+def test_an_id_and_its_acronym_name_the_same_cache_file(tmp_path):
+    """An overlay built as MD must be found when asked for as 362."""
+    from ccf_glass_render.cache import structure_cache_path
+
+    by_acronym = structure_cache_path("sagittal", 10.0, ["MD"], tmp_path)
+    by_id = structure_cache_path("sagittal", 10.0, ["362"], tmp_path)
+    assert by_acronym == by_id
+    assert by_acronym.name == "sagittal_10um_struct_MD.npz"
+
+
+def test_a_view_alias_names_the_same_cache_file(tmp_path):
+    from ccf_glass_render.cache import structure_cache_path
+
+    assert (structure_cache_path("saggital", 10.0, ["TH"], tmp_path)
+            == structure_cache_path("sagittal", 10.0, ["TH"], tmp_path))

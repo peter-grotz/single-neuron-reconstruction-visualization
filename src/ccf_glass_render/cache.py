@@ -182,10 +182,18 @@ class StructureView:
 
 def structure_cache_path(view: str, resolution_um: float, acronyms: list[str],
                          root: Path | None = None) -> Path:
-    """Location of a cached structure overlay; the name encodes its contents."""
+    """Location of a cached structure overlay; the name encodes its contents.
+
+    Structures are resolved to their acronym first, so an overlay built as `MD`
+    is found when it is asked for as `362`. Naming the file after whatever
+    string the caller used would cache the same overlay twice and miss it on
+    the other spelling.
+    """
+    from . import structures as st
+
     base = Path(root) if root else atlas.cache_dir() / "views"
     base.mkdir(parents=True, exist_ok=True)
-    tag = "-".join(sorted(acronyms))
+    tag = "-".join(sorted(st.lookup(a).acronym for a in acronyms))
     return base / f"{canonical_view(view)}_{int(resolution_um)}um_struct_{tag}.npz"
 
 
