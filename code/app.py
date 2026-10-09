@@ -103,20 +103,41 @@ def _pick(assets: list[Path], subject: str) -> list[Path]:
     """
     wanted = set(_csv(subject))
     if wanted:
-        chosen = [a for a in assets if _subject_of(a) in wanted]
-        missing = wanted - {_subject_of(a) for a in chosen}
+        # a full mount name selects one asset outright, which is how a subject
+        # attached twice -- two processing dates of the same brain -- is resolved
+        by_name = [a for a in assets if a.name in wanted]
+        rest = wanted - {a.name for a in by_name}
+        chosen = by_name + [a for a in assets if _subject_of(a) in rest]
+        missing = rest - {_subject_of(a) for a in chosen}
         if missing:
             _log(f"error: no mounted asset for subject(s) {sorted(missing)}. "
-                 f"Available: {sorted(filter(None, map(_subject_of, assets)))}")
+                 f"Available: {_available(assets)}")
             raise SystemExit(2)
+        for one in sorted(rest):
+            same = [a.name for a in chosen if _subject_of(a) == one]
+            if len(same) > 1:
+                _log(f"error: subject {one} is attached {len(same)} times, so it "
+                     "is ambiguous. Give the full asset name instead of the "
+                     f"subject id: {sorted(same)}")
+                raise SystemExit(2)
         return chosen
     if len(assets) <= 1:
         return assets
-    available = sorted(filter(None, map(_subject_of, assets)))
     _log(f"error: {len(assets)} reconstruction assets are mounted, which would "
          "render every subject into one figure. Set the subject parameter to "
-         f"choose. Available: {available}")
+         f"choose. Available: {_available(assets)}")
     raise SystemExit(2)
+
+
+def _available(assets: list[Path]) -> list[str]:
+    """Subject ids on offer, marking any attached more than once."""
+    counts: dict[str, int] = {}
+    for a in assets:
+        s = _subject_of(a)
+        if s:
+            counts[s] = counts.get(s, 0) + 1
+    return [f"{s} (x{n}, give the full asset name)" if n > 1 else s
+            for s, n in sorted(counts.items())]
 
 
 def _build_cache(args, views: list[str]) -> int:

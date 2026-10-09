@@ -84,3 +84,39 @@ def test_unknown_subject_lists_what_is_available(tmp_path, monkeypatch):
     assets = app._asset_dirs(tmp_path / "nope")
     with pytest.raises(SystemExit):
         app._pick(assets, "999999")
+
+
+def test_a_subject_attached_twice_is_ambiguous(tmp_path, monkeypatch):
+    """Two processing dates of one brain can both be attached."""
+    data = tmp_path / "mounts"
+    for d in ("2026_03_09", "2026_03_17"):
+        (data / f"exaSPIM_720165_processed_reconstructions_{d}"
+         / "final/ccf_space_reconstructions/swcs").mkdir(parents=True)
+    monkeypatch.setattr(app, "DATA", data)
+    assets = app._asset_dirs(tmp_path / "nope")
+    with pytest.raises(SystemExit):
+        app._pick(assets, "720165")
+
+
+def test_a_full_asset_name_resolves_the_ambiguity(tmp_path, monkeypatch):
+    data = tmp_path / "mounts"
+    for d in ("2026_03_09", "2026_03_17"):
+        (data / f"exaSPIM_720165_processed_reconstructions_{d}"
+         / "final/ccf_space_reconstructions/swcs").mkdir(parents=True)
+    monkeypatch.setattr(app, "DATA", data)
+    assets = app._asset_dirs(tmp_path / "nope")
+    picked = app._pick(assets, "exaSPIM_720165_processed_reconstructions_2026_03_17")
+    assert [a.name for a in picked] == [
+        "exaSPIM_720165_processed_reconstructions_2026_03_17"]
+
+
+def test_available_marks_duplicated_subjects(tmp_path, monkeypatch):
+    data = tmp_path / "mounts"
+    for n in ("exaSPIM_720165_processed_reconstructions_2026_03_09",
+              "exaSPIM_720165_processed_reconstructions_2026_03_17",
+              "exaSPIM_685221_processed_reconstructions_2026_06_15"):
+        (data / n / "final/ccf_space_reconstructions/swcs").mkdir(parents=True)
+    monkeypatch.setattr(app, "DATA", data)
+    out = app._available(app._asset_dirs(tmp_path / "nope"))
+    assert "685221" in out
+    assert any("720165" in x and "x2" in x for x in out)
