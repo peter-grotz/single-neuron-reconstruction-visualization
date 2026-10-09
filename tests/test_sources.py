@@ -48,3 +48,15 @@ def test_missing_directory_raises(tmp_path):
 def test_directory_without_swc_raises(tmp_path):
     with pytest.raises(FileNotFoundError, match="no .swc"):
         resolve(str(tmp_path), subdir=None)
+
+
+def test_s3_uri_survives_a_path_round_trip():
+    """Path() collapses "s3://" to "s3:/"; callers must not pre-wrap URIs.
+
+    A capsule run failed exactly this way, reporting that
+    "s3:/aind-open-data/..." did not exist.
+    """
+    uri = "s3://aind-open-data/exaSPIM_1_2024-01-01_00-00-00_reconstructions_x"
+    assert str(Path(uri)) != uri          # the hazard is real
+    src = Source(uri=uri, local=Path("."), files=[])
+    assert src.uri.startswith("s3://")

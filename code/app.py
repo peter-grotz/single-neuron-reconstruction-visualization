@@ -110,15 +110,17 @@ def _render(args, views: list[str]) -> int:
     from ccf_glass_render.sources import resolve
 
     cache_root = _cache_root(args.cache)
-    assets = _asset_dirs(cache_root)
+    # kept as strings: Path("s3://bucket/x") collapses the double slash to
+    # "s3:/bucket/x", which then reads as a local path and fails to exist
+    assets = [str(p) for p in _asset_dirs(cache_root)]
     if args.asset:
-        assets = [Path(a) for a in _csv(args.asset)]
+        assets = _csv(args.asset)
     if not assets:
         _log("error: no reconstruction data asset is attached. Attach one in "
              "the App Panel, or give an s3:// URI in the asset field.")
         return 2
 
-    sources = [resolve(str(a), subdir=args.subdir or None) for a in assets]
+    sources = [resolve(a, subdir=args.subdir or None) for a in assets]
     for source in sources:
         _log(f"{source.asset_name}: {len(source.files)} swc files")
 
