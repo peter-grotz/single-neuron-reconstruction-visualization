@@ -139,24 +139,11 @@ MIT. Not an officially supported Allen Institute product.
 
 ## Code Ocean
 
-The repository doubles as a Code Ocean capsule. `environment/Dockerfile` installs
-the renderer from a pinned commit of this repository, and `code/run` passes App
-Panel parameters to `code/app.py`.
+The repository doubles as a Code Ocean capsule: `environment/Dockerfile` builds
+the environment, `code/run` passes App Panel parameters to `code/app.py`.
+Reconstruction assets are attached in the panel and discovered automatically; a
+second asset holds the prerendered glass views, which is the difference between
+a 38-second run and a 59-minute one.
 
-Reconstruction assets are attached in the App Panel; the capsule finds their SWC
-files automatically. A second asset holds the prerendered glass views, so a run
-costs seconds rather than rebuilding the brain. Build that asset once with
-`mode = build_cache`, which writes `/results/ccf_cache`, then create a data asset
-from the run and attach it to every later run.
-
-| Panel parameter | Default |
-|---|---|
-| `mode` | `render`, or `build_cache` to make the cache asset |
-| `views` | `sagittal,iso` |
-| `resolution` | `10` |
-| `colors` | profile default (`vivid`) |
-| `thickness` | profile default (`1.15`) |
-| `compartment` | `all` |
-| `structure` | none |
-| `cells`, `sample`, `seed` | all cells, unseeded subset off |
-| `label`, `dpi`, `formats` | `cells`, `300`, `png,svg` |
+See [docs/code-ocean.md](docs/code-ocean.md) for the panel parameters, the cache
+asset and how to rebuild it.
