@@ -84,6 +84,7 @@
 			"category": "8uUohbZGHYVjwv1R",
 			"name": "Cell ID",
 			"description": "Specific cell ID you would like to visualize",
+			"help_text": "\"N011-685221-SP+N018-685221-DS+N027-685221-SP\"",
 			"type": "text",
 			"value_type": "string"
 		},

@@ -118,6 +118,10 @@
 			"mount": "exaSPIM_822178_processed_reconstructions_2026_07_09"
 		},
 		{
+			"id": "79bf9032-5cff-4038-b2b8-8a24fa098e3b",
+			"mount": "allen_mouse_ccf"
+		},
+		{
 			"id": "7ad6a512-9eac-4cc3-a158-943cbe5b0412",
 			"mount": "exaSPIM_720165_processed_reconstructions_2026_03_09"
 		},
