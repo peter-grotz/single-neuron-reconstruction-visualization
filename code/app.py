@@ -191,6 +191,79 @@ def _select(cells: dict, args, profile) -> dict:
     return cells
 
 
+ORDERED = ("views", "colors", "thickness", "sample", "cells", "seed",
+           "compartment", "structure")
+"""Panel order for Ordered parameters, which arrive without their names.
+
+Named parameters are safer and are what the docs recommend: reordering the
+panel then cannot change which field a value lands in. This mapping exists so
+an Ordered panel runs at all, and it validates rather than trusting position --
+a value that cannot be what its slot expects is reported instead of silently
+becoming someone else's setting.
+"""
+
+
+def _as_named(argv: list[str]) -> list[str]:
+    """Convert bare positional arguments into named ones, by panel order."""
+    if not argv or argv[0].startswith("-"):
+        return argv
+    positional = []
+    for value in argv:
+        if value.startswith("-"):
+            break
+        positional.append(value)
+    rest = argv[len(positional):]
+    if len(positional) > len(ORDERED):
+        _log(f"error: {len(positional)} ordered parameters but only "
+             f"{len(ORDERED)} are mapped: {list(ORDERED)}")
+        raise SystemExit(2)
+
+    out = []
+    for name, value in zip(ORDERED, positional, strict=False):
+        _check_ordered(name, value)
+        out += [f"--{name}", value]
+    _log(f"ordered parameters mapped to {ORDERED[:len(positional)]}")
+    return out + rest
+
+
+def _check_ordered(name: str, value: str) -> None:
+    """Reject a positional value that cannot belong to its slot.
+
+    Position is the only thing identifying an Ordered parameter, so a panel
+    reordered in the UI would otherwise feed every value to the wrong setting
+    without complaint.
+    """
+    if not value:
+        return
+
+    def refuse(why: str) -> None:
+        raise SystemExit(
+            f"error: the {name!r} slot got {value!r}, which {why}. The App "
+            "Panel parameters are probably not in the order this script "
+            f"expects ({', '.join(ORDERED)}). Give each parameter a Parameter "
+            "Name in the App Builder instead of relying on order."
+        )
+
+    if name in ("thickness", "sample", "seed", "dpi"):
+        try:
+            float(value)
+        except ValueError:
+            refuse("is not a number")
+    elif name == "views":
+        from ccf_glass_render.profile import canonical_view
+        try:
+            for one in _csv(value):
+                canonical_view(one)
+        except ValueError:
+            refuse("is not a view name")
+    elif name == "colors":
+        from ccf_glass_render import palettes
+        if value not in palettes.names():
+            refuse("is not a colour scheme")
+    elif name == "compartment" and value not in ("all", "axon", "dendrite", "soma"):
+        refuse("is not a compartment")
+
+
 def main(argv: list[str] | None = None) -> int:
     """Parse App Panel parameters and dispatch."""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -215,7 +288,7 @@ def main(argv: list[str] | None = None) -> int:
                         help="override the attached assets with explicit paths or s3:// URIs")
     parser.add_argument("--subdir", default="ccf_space_reconstructions/swc")
     parser.add_argument("--cache", default="", help="override the cache location")
-    args = parser.parse_args(argv)
+    args = parser.parse_args(_as_named(argv if argv is not None else sys.argv[1:]))
 
     RESULTS.mkdir(parents=True, exist_ok=True)
     SCRATCH.mkdir(parents=True, exist_ok=True)
