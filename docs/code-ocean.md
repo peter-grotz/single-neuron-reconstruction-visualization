@@ -127,3 +127,17 @@ is rejected at launch with `invalid base image registry`.
 The renderer is installed from a pinned commit of this repository rather than
 from the capsule's own files, so a released capsule names exactly the code it
 ran. Bump `RENDERER_REF` in `environment/Dockerfile` to pick up new work.
+
+
+## Many attached subjects
+
+Every asset attached to a capsule mounts on every run -- there is no
+per-run selection -- so a capsule with 55 subjects attached would render all of
+them into one figure. The `subject` parameter narrows to one:
+
+| `subject` | Result |
+|---|---|
+| blank, one asset mounted | that asset |
+| blank, several mounted | refused, listing the subjects available |
+| `720165` | that subject |
+| `720165+709222` | both, deliberately |

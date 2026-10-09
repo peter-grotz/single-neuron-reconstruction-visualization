@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -86,6 +87,38 @@ def _asset_dirs(cache_root: Path) -> list[Path]:
     return out
 
 
+def _subject_of(path: Path) -> str | None:
+    """Subject id from a mount name like exaSPIM_720165_processed_..."""
+    found = re.search(r"exaspim_(\d+)", path.name, re.IGNORECASE)
+    return found.group(1) if found else None
+
+
+def _pick(assets: list[Path], subject: str) -> list[Path]:
+    """Narrow mounted assets to one subject, or explain the ambiguity.
+
+    Every asset attached to a capsule mounts on every run, so a capsule with
+    dozens of subjects attached would otherwise render all of them into one
+    figure. Rendering several deliberately is still possible -- name more than
+    one subject -- but it has to be asked for.
+    """
+    wanted = set(_csv(subject))
+    if wanted:
+        chosen = [a for a in assets if _subject_of(a) in wanted]
+        missing = wanted - {_subject_of(a) for a in chosen}
+        if missing:
+            _log(f"error: no mounted asset for subject(s) {sorted(missing)}. "
+                 f"Available: {sorted(filter(None, map(_subject_of, assets)))}")
+            raise SystemExit(2)
+        return chosen
+    if len(assets) <= 1:
+        return assets
+    available = sorted(filter(None, map(_subject_of, assets)))
+    _log(f"error: {len(assets)} reconstruction assets are mounted, which would "
+         "render every subject into one figure. Set the subject parameter to "
+         f"choose. Available: {available}")
+    raise SystemExit(2)
+
+
 def _build_cache(args, views: list[str]) -> int:
     """Prerender views and overlays into /results for capture as an asset."""
     from ccf_glass_render.cache import build_structures, build_view
@@ -121,7 +154,7 @@ def _render(args, views: list[str]) -> int:
     cache_root = _cache_root(args.cache)
     # kept as strings: Path("s3://bucket/x") collapses the double slash to
     # "s3:/bucket/x", which then reads as a local path and fails to exist
-    assets = [str(p) for p in _asset_dirs(cache_root)]
+    assets = [str(p) for p in _pick(_asset_dirs(cache_root), args.subject)]
     if args.asset:
         assets = _csv(args.asset)
     if not assets:
@@ -278,6 +311,9 @@ def main(argv: list[str] | None = None) -> int:
                         "--cell_morphology_type", dest="compartment", default="all")
     parser.add_argument("--structure", default="")
     parser.add_argument("--cells", default="")
+    parser.add_argument("--subject", default="",
+                        help="subject id(s) to render when several assets are "
+                             "mounted, e.g. 720165")
     parser.add_argument("--sample", type=int, default=0)
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--label", default="cells")
