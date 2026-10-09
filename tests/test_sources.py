@@ -60,3 +60,37 @@ def test_s3_uri_survives_a_path_round_trip():
     assert str(Path(uri)) != uri          # the hazard is real
     src = Source(uri=uri, local=Path("."), files=[])
     assert src.uri.startswith("s3://")
+
+
+def _swc(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("1 0 1 1 1 1 -1\n")
+
+
+def test_finds_the_swcs_subdir_spelling(tmp_path):
+    """Assets use both `swc` and `swcs`, and nest under `final/`."""
+    _swc(tmp_path / "final/ccf_space_reconstructions/swcs/N001-1-axon-XX.swc")
+    assert resolve(str(tmp_path)).local.name == "swcs"
+
+
+def test_several_coordinate_spaces_raise_rather_than_merge(tmp_path):
+    """The same cells in several spaces must not be silently combined.
+
+    A capsule run merged seven copies of five cells and drew two of them
+    outside the brain, exiting 0.
+    """
+    for space in ("final/ccf_space_reconstructions/swcs", "refinement/raw",
+                  "alignment/aligned_swcs"):
+        _swc(tmp_path / space / "N001-720165-VM.swc")
+    # the known CCF spelling wins outright
+    assert resolve(str(tmp_path)).local.name == "swcs"
+    # but with no recognisable subdir, refuse to choose
+    for space in ("space_a", "space_b"):
+        _swc(tmp_path / "other" / space / "N001-720165-VM.swc")
+    with pytest.raises(ValueError, match="coordinate spaces"):
+        resolve(str(tmp_path / "other"), subdir=None)
+
+
+def test_single_swc_directory_is_still_found_anywhere(tmp_path):
+    _swc(tmp_path / "weird/nested/place/N001-1.swc")
+    assert resolve(str(tmp_path), subdir=None).local.name == "place"

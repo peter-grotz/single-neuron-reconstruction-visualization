@@ -17,6 +17,15 @@ from . import atlas
 SWC_SUBDIR = "ccf_space_reconstructions/swc"
 """Where CCF-space SWCs sit inside an exaSPIM reconstruction asset."""
 
+SWC_SUBDIR_ALIASES = (
+    "ccf_space_reconstructions/swc",
+    "ccf_space_reconstructions/swcs",
+    "final/ccf_space_reconstructions/swc",
+    "final/ccf_space_reconstructions/swcs",
+)
+"""Spellings seen across assets. Both `swc` and `swcs` occur, and processed
+assets nest the whole thing under `final/`."""
+
 _ASSET = re.compile(r"^(?P<modality>\w+)_(?P<subject>\d+)_(?P<acquired>[\d\-_]+?)"
                     r"_reconstructions_(?P<made>[\d\-_]+)$")
 
@@ -59,7 +68,7 @@ def resolve(uri: str, subdir: str | None = SWC_SUBDIR,
         root = Path(uri).expanduser()
         if not root.exists():
             raise FileNotFoundError(f"{root} does not exist")
-        inner = root / subdir if subdir and (root / subdir).is_dir() else root
+        inner = _swc_dir(root, subdir)
         files = sorted(inner.rglob("*.swc"))
         if not files:
             raise FileNotFoundError(f"no .swc files under {inner}")
@@ -69,6 +78,8 @@ def resolve(uri: str, subdir: str | None = SWC_SUBDIR,
     bucket, prefix = parsed.netloc, parsed.path.lstrip("/").rstrip("/")
     if subdir and not prefix.endswith(subdir):
         prefix = f"{prefix}/{subdir}"
+    # S3 listing is already prefix-scoped, so the coordinate-space ambiguity
+    # above cannot arise unless the prefix itself is too broad
     dest = Path(dest) if dest else atlas.cache_dir() / "assets" / bucket / prefix
     dest.mkdir(parents=True, exist_ok=True)
 
@@ -76,6 +87,38 @@ def resolve(uri: str, subdir: str | None = SWC_SUBDIR,
     if not files:
         raise FileNotFoundError(f"no .swc files under s3://{bucket}/{prefix}")
     return Source(uri=uri, local=dest, files=files)
+
+
+def _swc_dir(root: Path, subdir: str | None) -> Path:
+    """Find the one directory of SWCs under `root`, or refuse to guess.
+
+    A processed reconstruction asset carries the same cells in several
+    coordinate spaces -- `refinement/raw`, `refinement/final-world`,
+    `alignment/aligned_swcs` and so on -- and only the CCF-space copy belongs in
+    a CCF render. An earlier version fell back to a recursive search whenever
+    the configured subdirectory missed, which silently merged all of them: every
+    cell was drawn seven times, twice outside the brain, and the run still
+    exited 0. So ambiguity is now an error rather than a guess.
+    """
+    candidates = [subdir] if subdir else []
+    candidates += [a for a in SWC_SUBDIR_ALIASES if a != subdir]
+    for candidate in candidates:
+        if candidate and (root / candidate).is_dir():
+            return root / candidate
+
+    holders = sorted({p.parent for p in root.rglob("*.swc")})
+    if not holders:
+        raise FileNotFoundError(f"no .swc files under {root}")
+    if len(holders) == 1:
+        return holders[0]
+
+    listed = "\n  ".join(str(h.relative_to(root)) for h in holders)
+    raise ValueError(
+        f"{root.name} holds .swc files in {len(holders)} directories, which are "
+        f"usually the same cells in different coordinate spaces:\n  {listed}\n"
+        "Rendering them together would place cells outside the brain. Pass the "
+        "CCF-space one explicitly, e.g. --subdir "
+        "final/ccf_space_reconstructions/swcs")
 
 
 def _sync(bucket: str, prefix: str, dest: Path, unsigned: bool) -> list[Path]:
