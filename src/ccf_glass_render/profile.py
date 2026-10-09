@@ -24,9 +24,16 @@ VIEWS: dict[str, tuple[float, float]] = {
 }
 """The three anatomical planes, plus a three-quarter view."""
 
-VIEW_ALIASES: dict[str, str] = {"dorsal": "horizontal", "axial": "horizontal",
-                                "transverse": "horizontal", "lateral": "sagittal"}
-"""`dorsal` was the earlier name for the horizontal plane; both still resolve."""
+VIEW_ALIASES: dict[str, str] = {
+    "dorsal": "horizontal", "axial": "horizontal", "transverse": "horizontal",
+    "lateral": "sagittal",
+    # "saggital" is the usual misspelling and reads as correct at a glance, so
+    # it is accepted rather than failing a run over a doubled letter
+    "saggital": "sagittal", "sagital": "sagittal", "saggittal": "sagittal",
+    "horizonal": "horizontal", "coronol": "coronal",
+}
+"""Alternative names. `dorsal` was the earlier name for the horizontal plane,
+and the common misspellings resolve rather than failing a run."""
 
 
 def canonical_view(name: str) -> str:

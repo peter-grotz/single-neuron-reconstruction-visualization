@@ -35,9 +35,21 @@ def test_unknown_acronym_raises():
         structures.lookup("NOTASTRUCTURE")
 
 
-def test_wrong_case_suggests_the_right_one():
-    with pytest.raises(KeyError, match="did you mean"):
-        structures.lookup("md")
+def test_wrong_case_resolves():
+    """A case near-miss is resolved rather than refused."""
+    assert structures.lookup("md").acronym == "MD"
+    assert structures.lookup(" th ").acronym == "TH"
+
+
+def test_numeric_allen_id_resolves():
+    """The App Panel asks for an allenId, so ids must work as well as acronyms."""
+    assert structures.lookup("549").acronym == "TH"
+    assert structures.lookup("362").acronym == "MD"
+
+
+def test_unknown_numeric_id_says_so():
+    with pytest.raises(KeyError, match="no CCF structure has id"):
+        structures.lookup("99999999")
 
 
 def test_search_finds_by_name():

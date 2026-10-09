@@ -73,13 +73,26 @@ def _graph() -> dict[str, Structure]:
 
 
 def lookup(acronym: str) -> Structure:
-    """Resolve a CCF acronym, case-sensitively as the atlas spells it."""
+    """Resolve a CCF structure by acronym or by numeric Allen id.
+
+    Acronyms are the atlas's own spelling, but a near-miss on case is resolved
+    rather than refused, and an id works too -- the App Panel asks for one, and
+    an atlas id is easier to copy out of a table than an acronym is to recall.
+    """
     table = _graph()
-    if acronym not in table:
-        near = [k for k in table if k.lower() == acronym.lower()]
-        hint = f"; did you mean {near[0]!r}?" if near else ""
-        raise KeyError(f"unknown CCF structure {acronym!r}{hint}")
-    return table[acronym]
+    key = acronym.strip()
+    if key in table:
+        return table[key]
+    if key.isdigit():
+        by_id = {s.id: s for s in table.values()}
+        found = by_id.get(int(key))
+        if found:
+            return found
+        raise KeyError(f"no CCF structure has id {key}")
+    near = [k for k in table if k.lower() == key.lower()]
+    if near:
+        return table[near[0]]
+    raise KeyError(f"unknown CCF structure {acronym!r}")
 
 
 @lru_cache(maxsize=1)

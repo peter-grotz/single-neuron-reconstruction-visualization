@@ -88,7 +88,7 @@ wherever a field takes several values.
 | `colors` | list | `vivid` | `vivid`, `allen`, `okabe-ito`, `tab10`, `set1`, `dark2`, `dark`, `husl`, `viridis`, `turbo`. Fixed schemes cycle past their length; `dark`/`husl`/`viridis`/`turbo` give every cell a unique colour |
 | `thickness` | input | blank | Tube radius in 20 µm pixels; blank means 1.15 |
 | `compartment` | list | `all` | `all`, `axon`, `dendrite`, `soma`. Also binds as `cell_morphology_type` |
-| `structure` | input | blank | CCF acronyms, comma separated. Only `TH`, `MD`, `Isocortex`, `CP` are cached |
+| `structure` | input | blank | CCF acronym or numeric Allen id, e.g. `TH` or `549`. Only `TH`, `MD`, `Isocortex`, `CP` are cached |
 | `sample` | input | blank | Seeded random subset |
 | `cells` | input | blank | Explicit ids, comma separated |
 | `seed` | input | blank | Changes the colour assignment |

@@ -64,3 +64,9 @@ def test_aliases_and_case_resolve(given, expected):
 def test_unknown_view_names_the_choices():
     with pytest.raises(ValueError, match="choose from"):
         canonical_view("oblique")
+
+
+@pytest.mark.parametrize("given", ["saggital", "sagital", "saggittal", "Saggital"])
+def test_common_misspellings_of_sagittal_resolve(given):
+    """The doubled-g spelling reads as correct at a glance; it should not fail a run."""
+    assert canonical_view(given) == "sagittal"
