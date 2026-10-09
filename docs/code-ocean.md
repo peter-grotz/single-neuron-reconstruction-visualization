@@ -73,10 +73,17 @@ Set `code/run` as the File to Run, and make every parameter **Named**, not
 Ordered. All of them are optional, so they can be added one at a time without
 breaking existing runs.
 
+List parameters are single-selection, so a choice that means "both views" has
+to be one option whose value carries both names. Use `+` rather than a comma:
+the App Builder does not document whether a List parameter's values are
+themselves comma separated, so `sagittal,iso` may be split into two options
+instead of offered as one. The app accepts commas, plus signs or spaces
+wherever a field takes several values.
+
 | Name | Type | Default | Notes |
 |---|---|---|---|
 | `mode` | list | `render` | `render`, `build_cache` |
-| `views` | list | `sagittal,iso` | `sagittal`, `iso`, `sagittal,iso`. Add `coronal`/`dorsal` only after caching them |
+| `views` | list | `sagittal+iso` | `sagittal+iso`, `sagittal`, `iso`. Add `coronal`/`dorsal` only after caching them |
 | `resolution` | list | `10` | `10` only, until a 20 µm cache exists. A list, not free text |
 | `colors` | list | `vivid` | `vivid`, `allen`, `okabe-ito`, `tab10`, `set1`, `dark2`, `dark`, `husl`, `viridis`, `turbo`. Fixed schemes cycle past their length; `dark`/`husl`/`viridis`/`turbo` give every cell a unique colour |
 | `thickness` | input | blank | Tube radius in 20 µm pixels; blank means 1.15 |
@@ -87,7 +94,7 @@ breaking existing runs.
 | `seed` | input | blank | Changes the colour assignment |
 | `label` | input | `cells` | Output filename prefix |
 | `dpi` | input | `300` | |
-| `formats` | list | `png,svg` | |
+| `formats` | list | `png+svg` | `png+svg`, `png`, `svg` |
 
 `profile`, `asset`, `subdir` and `cache` are deliberately left off the panel.
 They override where data comes from, and exposing them invites a run that

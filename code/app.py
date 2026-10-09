@@ -36,10 +36,19 @@ def _log(message: str) -> None:
 
 
 def _csv(value: str | None) -> list[str]:
-    """Split a comma or space separated panel field."""
+    """Split a multi-valued panel field.
+
+    Accepts commas, plus signs or whitespace. The App Builder does not document
+    whether a List parameter's values are themselves comma separated, so a
+    choice like ``sagittal,iso`` might be split into two options rather than
+    offered as one. ``sagittal+iso`` is unambiguous either way, and is what the
+    panel should use.
+    """
     if not value:
         return []
-    return [v.strip() for v in value.replace(",", " ").split() if v.strip()]
+    for separator in (",", "+"):
+        value = value.replace(separator, " ")
+    return [v.strip() for v in value.split() if v.strip()]
 
 
 def _cache_root(explicit: str | None) -> Path:
