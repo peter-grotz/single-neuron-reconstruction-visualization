@@ -27,10 +27,12 @@ def test_assignment_is_deterministic():
     assert all((first[c] == second[c]).all() for c in cells)
 
 
-def test_more_cells_than_a_fixed_scheme_raises_rather_than_repeating():
-    cells = [f"N{i:03d}-1" for i in range(9)]
-    with pytest.raises(ValueError, match="9 cells"):
-        assign_colours(cells, RenderProfile())
+def test_more_cells_than_a_fixed_scheme_cycles_it():
+    """Every cell is still assigned; colours repeat once the scheme runs out."""
+    cells = [f"N{i:03d}-1" for i in range(46)]
+    colours = assign_colours(cells, RenderProfile())
+    assert len(colours) == 46
+    assert len({tuple(v) for v in colours.values()}) == len(palettes.FIXED["vivid"])
 
 
 def test_a_generated_scheme_sizes_itself_to_the_figure():
@@ -48,11 +50,12 @@ def test_explicit_palette_overrides_the_scheme():
     assert np.allclose(colours["N001-1"], mcolors.to_rgb("#123456"))
 
 
-def test_explicit_palette_too_small_raises():
+def test_explicit_palette_shorter_than_the_cells_cycles_too():
     profile = replace(RenderProfile(), skeleton=replace(
         RenderProfile().skeleton, palette=("#123456",)))
-    with pytest.raises(ValueError, match="profile palette"):
-        assign_colours(["N001-1", "N002-1"], profile)
+    colours = assign_colours(["N001-1", "N002-1"], profile)
+    assert len(colours) == 2
+    assert len({tuple(v) for v in colours.values()}) == 1
 
 
 @pytest.mark.parametrize("scheme", palettes.names())

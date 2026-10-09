@@ -11,6 +11,7 @@ or generated for any `n`.
 from __future__ import annotations
 
 import colorsys
+import random
 from collections.abc import Callable
 
 import numpy as np
@@ -138,26 +139,55 @@ def names() -> list[str]:
     return sorted(set(FIXED) | set(GENERATED))
 
 
-def palette(scheme: str, n: int) -> list[str]:
+def palette(scheme: str, n: int, seed: int | None = None) -> list[str]:
     """Return `n` hex colours for `scheme`.
+
+    A fixed scheme shorter than `n` is cycled: each repeat is a fresh shuffle
+    of the same colours, so the sequence does not simply repeat in order, and a
+    repeat never lands next to its own previous use. Colours therefore recur
+    once a figure holds more cells than the scheme has entries -- two cells can
+    share a hue, and must be told apart by position rather than colour. Use a
+    generated scheme when every cell needs a unique colour.
 
     Raises
     ------
     ValueError
-        If the scheme is unknown, or a fixed scheme has fewer colours than
-        cells. Recycling a fixed palette would put the same hue on two cells in
-        one figure, which is why this fails rather than wrapping.
+        If the scheme is unknown.
     """
     if scheme in GENERATED:
         return GENERATED[scheme](n)
     if scheme not in FIXED:
         raise ValueError(f"unknown colour scheme {scheme!r}; choose from {names()}")
-    fixed = FIXED[scheme]
-    if n > len(fixed):
-        generated = sorted(GENERATED)
-        raise ValueError(
-            f"scheme {scheme!r} has {len(fixed)} colours but {n} cells were "
-            f"selected; render fewer cells, or use a generated scheme "
-            f"({', '.join(generated)}) which sizes itself to the figure"
-        )
-    return list(fixed[:n])
+    fixed = list(FIXED[scheme])
+    if n <= len(fixed):
+        return fixed[:n]
+
+    rng = random.Random(seed)
+    out: list[str] = []
+    while len(out) < n:
+        block = fixed[:]
+        rng.shuffle(block)
+        if out and block[0] == out[-1] and len(block) > 1:
+            # avoid the same colour straddling a block boundary
+            block[0], block[1] = block[1], block[0]
+        out += block
+    return out[:n]
+
+
+def cycle(colours: list[str], n: int, seed: int | None = None) -> list[str]:
+    """Repeat `colours` to length `n`, reshuffling each pass.
+
+    Shared by the explicit profile palette and the fixed schemes so both wrap
+    the same way.
+    """
+    if n <= len(colours):
+        return colours[:n]
+    rng = random.Random(seed)
+    out: list[str] = []
+    while len(out) < n:
+        block = colours[:]
+        rng.shuffle(block)
+        if out and block[0] == out[-1] and len(block) > 1:
+            block[0], block[1] = block[1], block[0]
+        out += block
+    return out[:n]

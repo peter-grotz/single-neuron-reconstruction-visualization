@@ -19,26 +19,24 @@ from .skeletons import Neuron  # noqa: E402
 
 
 def assign_colours(cell_ids: list[str], profile: RenderProfile) -> dict[str, np.ndarray]:
-    """One colour per cell, drawn from the profile's scheme without replacement.
+    """One colour per cell, drawn from the profile's scheme.
 
-    Sampling *with* replacement silently collides -- an eight-cell draw once
-    produced the same hue three times -- so this raises instead of shipping a
-    figure where two cells are indistinguishable.
+    Up to the scheme's length every cell gets a distinct colour, and that is
+    asserted: sampling *with* replacement silently collided once, giving the
+    same hue to three cells in an eight-cell draw. Past that length a fixed
+    scheme cycles by design, so repeats are expected rather than a bug.
     """
     skeleton = profile.skeleton
     if skeleton.palette:
-        pool = list(skeleton.palette)
-        if len(cell_ids) > len(pool):
-            raise ValueError(
-                f"{len(cell_ids)} cells but only {len(pool)} colours in the "
-                "profile palette; extend it or render fewer cells per figure"
-            )
+        pool = palettes.cycle(list(skeleton.palette), len(cell_ids), skeleton.seed)
     else:
-        pool = palettes.palette(skeleton.scheme, len(cell_ids))
-    chosen = random.Random(skeleton.seed).sample(pool, len(cell_ids))
+        pool = palettes.palette(skeleton.scheme, len(cell_ids), skeleton.seed)
+    chosen = random.Random(skeleton.seed).sample(pool, len(pool))
     out = {c: np.array(mcolors.to_rgb(k), np.float32)
            for c, k in zip(cell_ids, chosen, strict=True)}
-    if len({tuple(v) for v in out.values()}) != len(out):
+    if len(cell_ids) <= len(set(pool)) and len({tuple(v) for v in out.values()}) != len(out):
+        # while colours are still unique they must stay unique; beyond that the
+        # scheme is deliberately cycling and repeats are expected
         raise AssertionError("colour collision")
     return out
 

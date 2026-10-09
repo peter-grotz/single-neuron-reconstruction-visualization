@@ -59,9 +59,13 @@ the white glass; pale hues disappear on it.
 | `tab10`, `set1`, `dark2` | matplotlib default and two ColorBrewer qualitative sets |
 | `dark`, `husl`, `viridis`, `turbo` | generated for any cell count |
 
-Fixed schemes cap a figure at their length and raise rather than reusing a hue
-on two cells; the generated schemes size themselves to the selection. A profile
-may instead give `palette` as explicit hex values, which overrides the scheme.
+A fixed scheme shorter than the cell count is cycled, each pass reshuffled so
+the order does not simply repeat and a colour never lands beside itself. Past
+that point colours recur, and cells sharing a hue have to be told apart by
+position. The generated schemes size themselves to the selection instead, so
+use one of those when every cell needs its own colour. A profile may give
+`palette` as explicit hex values, which overrides the scheme and cycles the
+same way.
 
 The same eight cells under each scheme:
 
