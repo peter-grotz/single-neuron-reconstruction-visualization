@@ -1,0 +1,13 @@
+{
+	"version": 1,
+	"attached_datasets": [
+		{
+			"id": "714793b5-0772-46bb-aa13-c2e55f06a29f",
+			"mount": "ccf_cache"
+		},
+		{
+			"id": "7ad6a512-9eac-4cc3-a158-943cbe5b0412",
+			"mount": "exaSPIM_720165_processed_reconstructions_2026_03_09"
+		}
+	]
+}
