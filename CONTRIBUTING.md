@@ -24,3 +24,17 @@ That is how this package was validated against the scripts it replaced.
 
 [Conventional Commits](https://www.conventionalcommits.org/): `feat:`, `fix:`,
 `docs:`, `refactor:`, `perf:`, `test:`, `build:`, `ci:`.
+
+## Code Ocean: bump the pin when the library changes
+
+`environment/Dockerfile` installs the renderer from a pinned commit, so a push
+updates `code/` but leaves the installed library behind. A run then fails with
+an `ImportError` for whatever the new app code uses.
+
+Before pushing to the capsule, set `RENDERER_REF` to the commit being pushed:
+
+```bash
+sed -i '' "s/ARG RENDERER_REF=.*/ARG RENDERER_REF=$(git rev-parse HEAD)/" environment/Dockerfile
+```
+
+The pin is deliberate: a released capsule should name exactly the code it ran.
