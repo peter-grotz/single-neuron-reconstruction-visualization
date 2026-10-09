@@ -87,6 +87,14 @@
 			"value_type": "string"
 		},
 		{
+			"id": "breEMLfKkRN36Bfk",
+			"category": "8uUohbZGHYVjwv1R",
+			"name": "Color seed",
+			"type": "text",
+			"value_type": "integer",
+			"default_value": "3"
+		},
+		{
 			"id": "qyyyEj4ZT9PbyJHE",
 			"category": "vwWyT7KnBCPHkmVb",
 			"name": "Cell Morphology Type",
@@ -108,13 +116,6 @@
 			"description": "allenID of the ccf structure you'd like to visualize within the render",
 			"type": "text",
 			"value_type": "string"
-		},
-		{
-			"id": "breEMLfKkRN36Bfk",
-			"name": "Color seed",
-			"type": "text",
-			"value_type": "integer",
-			"default_value": "3"
 		}
 	]
 }
