@@ -2,12 +2,20 @@
 	"version": 1,
 	"attached_datasets": [
 		{
+			"id": "0c859198-c498-401c-9a5f-5b9324483a9f",
+			"mount": "exaSPIM_709222_processed_reconstructions_2026_03_10"
+		},
+		{
 			"id": "714793b5-0772-46bb-aa13-c2e55f06a29f",
 			"mount": "ccf_cache"
 		},
 		{
 			"id": "7ad6a512-9eac-4cc3-a158-943cbe5b0412",
 			"mount": "exaSPIM_720165_processed_reconstructions_2026_03_09"
+		},
+		{
+			"id": "f1465999-d81f-4026-838f-c27ab30987ba",
+			"mount": "exaSPIM_704522_processed_reconstructions_2026_03_10"
 		}
 	]
 }
