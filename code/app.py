@@ -245,8 +245,8 @@ def _select(cells: dict, args, profile) -> dict:
     return cells
 
 
-ORDERED = ("views", "colors", "thickness", "sample", "cells", "seed",
-           "compartment", "structure")
+ORDERED = ("subject", "views", "colors", "thickness", "sample", "cells",
+           "seed", "compartment", "structure")
 """Panel order for Ordered parameters, which arrive without their names.
 
 Named parameters are safer and are what the docs recommend: reordering the
@@ -316,6 +316,11 @@ def _check_ordered(name: str, value: str) -> None:
             refuse("is not a colour scheme")
     elif name == "compartment" and value not in ("all", "axon", "dendrite", "soma"):
         refuse("is not a compartment")
+    elif name == "subject":
+        from ccf_glass_render import palettes
+        from ccf_glass_render.profile import VIEWS
+        if value.lower() in VIEWS or value in palettes.names():
+            refuse("is a view or colour scheme, not a subject")
 
 
 def main(argv: list[str] | None = None) -> int:

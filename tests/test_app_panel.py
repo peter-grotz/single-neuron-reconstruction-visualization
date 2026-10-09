@@ -24,24 +24,30 @@ def test_named_arguments_pass_through():
 
 
 def test_ordered_arguments_take_the_panel_order():
-    got = app._as_named(["sagittal+iso", "vivid", "1.15"])
-    assert got == ["--views", "sagittal+iso", "--colors", "vivid", "--thickness", "1.15"]
+    got = app._as_named(["685221", "sagittal+iso", "vivid", "1.15"])
+    assert got == ["--subject", "685221", "--views", "sagittal+iso",
+                   "--colors", "vivid", "--thickness", "1.15"]
 
 
 def test_a_reordered_panel_is_refused_not_misassigned():
     """Position is the only identity an Ordered parameter has."""
     with pytest.raises(SystemExit, match="not a view name"):
-        app._as_named(["vivid", "sagittal+iso"])
+        app._as_named(["685221", "vivid", "sagittal+iso"])
+
+
+def test_a_view_in_the_subject_slot_is_refused():
+    with pytest.raises(SystemExit, match="not a subject"):
+        app._as_named(["sagittal", "sagittal+iso"])
 
 
 def test_a_non_numeric_thickness_is_refused():
     with pytest.raises(SystemExit, match="not a number"):
-        app._as_named(["sagittal", "vivid", "all"])
+        app._as_named(["685221", "sagittal", "vivid", "all"])
 
 
 def test_too_many_ordered_values_is_refused():
     with pytest.raises(SystemExit):
-        app._as_named(["sagittal"] * 20)
+        app._as_named(["685221"] * 20)
 
 
 def test_separators_accept_plus_comma_and_space():

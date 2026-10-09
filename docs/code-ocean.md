@@ -141,3 +141,21 @@ them into one figure. The `subject` parameter narrows to one:
 | blank, several mounted | refused, listing the subjects available |
 | `720165` | that subject |
 | `720165+709222` | both, deliberately |
+
+
+## Ordered parameters
+
+The panel passes values by position, not by name, so `code/app.py` maps them in
+this order:
+
+```
+1 subject   2 views    3 colors    4 thickness   5 sample
+6 cells     7 seed     8 compartment            9 structure
+```
+
+Reordering the panel in Build Mode changes what each value means. Each value is
+checked against what its slot can hold, so an obvious swap stops the run rather
+than being rendered wrong -- but two free-text fields next to each other, such
+as `cells` and `structure`, cannot be told apart. Switching the panel's
+Parameter Format to Named removes the hazard: names bind regardless of order,
+and the app accepts both forms.
