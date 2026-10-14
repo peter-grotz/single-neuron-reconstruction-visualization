@@ -241,7 +241,9 @@ def _classify(args, views: list[str]) -> int:
     home = args.soma_region or "MY"
     cache_root = _cache_root(args.cache)
     assets = _asset_dirs(cache_root)
-    if args.subject:
+    # the panel makes a subject mandatory, but a population statement needs
+    # every mounted asset, so "all" opts out of the filter
+    if args.subject and args.subject.strip().lower() not in ("all", "*"):
         assets = _pick(assets, args.subject)
     _log(f"scanning {len(assets)} assets for somata in {home}")
 
