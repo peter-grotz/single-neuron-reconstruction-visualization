@@ -54,9 +54,17 @@ CLASSES: tuple[tuple[int, str], ...] = (
     (2, "medulla only"),
     (3, "midbrain, no thalamus"),
     (4, "thalamus + midbrain"),
-    (5, "striatum"),
+    (5, "striatum / cortical"),
     (6, "spinal cord only"),
 )
+
+SPINAL = "SPINAL"
+"""Pseudo-target for axon leaving the atlas caudally, so the exclusive classes
+account for it. Without this a cell reaching cerebellum *and* spinal cord was
+labelled "cerebellum only", which 49 cells were."""
+
+FOREBRAIN = ("STR", "CTX")
+"""Class 5 covers striatum and cortex together."""
 
 
 def classify(p: Projection, local: str = "MY") -> int | None:
@@ -71,15 +79,15 @@ def classify(p: Projection, local: str = "MY") -> int | None:
     a projection is confined somewhere: every medullary cell arborises locally,
     so counting MY would make "only cerebellum" impossible.
     """
-    away = p.targets - {local}
+    away = _away(p, local)
 
-    if not away and p.is_spinal:
+    if away == {SPINAL}:
         return 6
     if away == {"CB"}:
         return 1
-    if not away and not p.is_spinal:
+    if not away:
         return 2
-    if "STR" in away:
+    if away & set(FOREBRAIN):
         return 5
     if "TH" in away and "MB" in away:
         return 4
@@ -88,17 +96,25 @@ def classify(p: Projection, local: str = "MY") -> int | None:
     return None
 
 
+def _away(p: Projection, local: str) -> set[str]:
+    """Targets outside the soma's own division, spinal cord included."""
+    away = set(p.targets) - {local}
+    if p.is_spinal:
+        away.add(SPINAL)
+    return away
+
+
 def ambiguous(p: Projection, local: str = "MY") -> list[int]:
     """Every class a projection satisfies, to show where the rules overlap."""
-    away = p.targets - {local}
+    away = _away(p, local)
     hits = []
-    if not away and p.is_spinal:
+    if away == {SPINAL}:
         hits.append(6)
     if away == {"CB"}:
         hits.append(1)
-    if not away and not p.is_spinal:
+    if not away:
         hits.append(2)
-    if "STR" in away:
+    if away & set(FOREBRAIN):
         hits.append(5)
     if "TH" in away and "MB" in away:
         hits.append(4)
