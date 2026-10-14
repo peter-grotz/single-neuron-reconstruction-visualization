@@ -118,6 +118,27 @@
 			"description": "allenID of the ccf structure you'd like to visualize within the render",
 			"type": "text",
 			"value_type": "string"
+		},
+		{
+			"id": "ZLE1O3XM1rK0IH8N",
+			"category": "vwWyT7KnBCPHkmVb",
+			"name": "Mode",
+			"type": "list",
+			"value_type": "string",
+			"default_value": "render",
+			"extra_data": [
+				"render",
+				"build_cache",
+				"classify"
+			]
+		},
+		{
+			"id": "0lFlFEYz0PcmBIGU",
+			"category": "vwWyT7KnBCPHkmVb",
+			"name": "soma_region",
+			"help_text": "CCF division the soma must sit in, for classify mode",
+			"type": "text",
+			"value_type": "string"
 		}
 	]
 }
