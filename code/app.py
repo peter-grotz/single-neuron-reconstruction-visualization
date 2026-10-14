@@ -372,7 +372,11 @@ def _select(cells: dict, args, profile) -> dict:
 
 
 ORDERED = ("subject", "views", "colors", "thickness", "sample", "cells",
-           "seed", "compartment", "structure")
+           "seed", "compartment", "structure", "mode", "soma_region")
+"""Panel order. Code Ocean truncates an API call to the parameters the panel
+defines and drops the rest silently, so anything the API needs to set -- mode
+above all -- has to exist in the panel. The last two are optional: a panel
+without them sends nine values and these keep their defaults."""
 """Panel order for Ordered parameters, which arrive without their names.
 
 Named parameters are safer and are what the docs recommend: reordering the
@@ -442,6 +446,8 @@ def _check_ordered(name: str, value: str) -> None:
             refuse("is not a colour scheme")
     elif name == "compartment" and value not in ("all", "axon", "dendrite", "soma"):
         refuse("is not a compartment")
+    elif name == "mode" and value not in ("render", "build_cache", "classify"):
+        refuse("is not a mode")
     elif name == "subject":
         from ccf_glass_render import palettes
         from ccf_glass_render.profile import VIEWS
