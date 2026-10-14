@@ -65,3 +65,29 @@ def test_every_scheme_renders_eight_distinct_cells(scheme):
         RenderProfile().skeleton, scheme=scheme))
     colours = assign_colours(cells, profile)
     assert len({tuple(v) for v in colours.values()}) == 8
+
+
+def test_canvas_grows_to_hold_cells_outside_the_brain(monkeypatch):
+    """Axons leave the atlas, and the splat drops anything off-canvas silently.
+
+    A spinal projection runs about 3 mm past the caudal bound, which clipped
+    296 rows off a sagittal figure before the canvas was sized to the cells.
+    """
+    import numpy as np
+
+    from ccf_glass_render.cache import BrainView
+    from ccf_glass_render.figure import render_cells
+    from ccf_glass_render.skeletons import Neuron
+
+    brain = BrainView(
+        base=np.ones((40, 30, 3), np.float32), rotation=np.eye(3),
+        centre_in=np.zeros(3), centre_out=np.zeros(3),
+        resolution_um=10.0, view="sagittal")
+    # a two-node cell sitting well past the canvas in both axes
+    far = Neuron("N001-1", np.array([[0.0, 0.0, 0.0], [700.0, 500.0, 0.0]]),
+                 np.array([-1, 1]), np.array([1, 2]), np.array([2, 2]))
+    image = render_cells(brain, {"N001-1": [far]}, RenderProfile(),
+                         colours={"N001-1": np.array([1.0, 0.0, 0.0], np.float32)})
+    # transposed on return, so the long axis is width
+    assert image.shape[1] > 40, "canvas should have grown past the brain"
+    assert image.shape[0] > 30

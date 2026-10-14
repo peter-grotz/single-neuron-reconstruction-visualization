@@ -64,6 +64,20 @@ def render_cells(brain: BrainView, cells: dict[str, list[Neuron]],
     base = splat.smooth_up(brain.base.astype(np.float32), factor)
     if structures is not None:
         base = _lay_structure(base, structures, factor)
+
+    # The cached brain is sized to the brain, but axons leave it -- a spinal
+    # projection runs 3 mm past the caudal bound of the atlas -- and anything
+    # outside the canvas is dropped by the splat without a word. Grow the
+    # canvas to hold the cells before drawing them.
+    points = np.vstack([brain.project(n.xyz) for ns in cells.values() for n in ns])
+    pad_top = max(int(np.ceil(-points[:, 0].min())) + 1, 0)
+    pad_left = max(int(np.ceil(-points[:, 1].min())) + 1, 0)
+    pad_bottom = max(int(np.ceil(points[:, 0].max())) + 2 - base.shape[0], 0)
+    pad_right = max(int(np.ceil(points[:, 1].max())) + 2 - base.shape[1], 0)
+    if any((pad_top, pad_left, pad_bottom, pad_right)):
+        base = np.pad(base, ((pad_top, pad_bottom), (pad_left, pad_right), (0, 0)),
+                      constant_values=1.0)
+    offset = np.array([pad_top, pad_left, 0.0])
     height, width = base.shape[:2]
 
     sup = profile.skeleton.supersample
@@ -75,15 +89,21 @@ def render_cells(brain: BrainView, cells: dict[str, list[Neuron]],
     for cell_id, neurons in sorted(cells.items()):
         rgb = colours[cell_id]
         for neuron in neurons:
-            pixels = brain.project(neuron.xyz) * np.array([sup * factor, sup * factor, factor])
+            pixels = (brain.project(neuron.xyz) + offset) * np.array(
+                [sup * factor, sup * factor, factor])
             items.append(
                 (splat.densify(pixels, neuron.parent, neuron.node_id,
                                step=max(radius * 0.5, 0.45)), rgb))
 
     behind = None
     if structures is not None:
-        behind = (splat.smooth_up_scalar(structures.front, factor) * factor,
-                  splat.smooth_up_scalar(structures.transmittance, factor))
+        front = splat.smooth_up_scalar(structures.front, factor) * factor
+        through = splat.smooth_up_scalar(structures.transmittance, factor)
+        if any((pad_top, pad_left, pad_bottom, pad_right)):
+            pads = ((pad_top, pad_bottom), (pad_left, pad_right))
+            front = np.pad(front, pads, constant_values=np.inf)
+            through = np.pad(through, pads, constant_values=1.0)
+        behind = (front, through)
     image = splat.composite(base, items, sup, radius,
                             profile.skeleton.shade_mix, profile.skeleton.alpha_gain,
                             behind=behind)
