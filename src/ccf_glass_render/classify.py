@@ -117,24 +117,60 @@ DIVISION_DOWN = 2
 def build_division_volume(out: Path, down: int = DIVISION_DOWN) -> Path:
     """Reduce the CCF annotation to one byte per voxel, naming its division.
 
-    The annotation is 4.8 GB as uint32 and loading it to classify a few hundred
-    cells was killing the machine. Only the major division matters here, and
-    there are nine of them, so a uint8 volume at 20 um is 150 MB and answers
-    the same question. Built once and carried in the cache asset, so a
-    classification run never decodes the annotation at all.
+    The annotation is 4.8 GB as uint32. Decoding it whole was killing the
+    machine, and the first version of this also compared the volume once per
+    label -- order 1e11 element comparisons -- and read a strided memmap, which
+    together ran for nine hours before being stopped.
+
+    So the NRRD is streamed plane by plane and mapped through a lookup array,
+    which is one pass over the data and never holds more than a single plane.
+    The result is 150 MB and is carried in the cache asset, so a classification
+    run never decodes the annotation at all.
     """
-    lookup = _division_lookup()
-    annotation = st.annotation(down)
+    import gzip
+
+    import nrrd
+
     index = {name: i + 1 for i, name in enumerate(DIVISIONS)}
-    out_vol = np.zeros(annotation.shape, np.uint8)
-    for start in range(0, annotation.shape[0], 100):
-        block = np.asarray(annotation[start:start + 100])
-        coded = np.zeros(block.shape, np.uint8)
-        for label in np.unique(block):
-            name = lookup.get(int(label))
-            if name:
-                coded[block == label] = index[name]
-        out_vol[start:start + 100] = coded
+    lookup = _division_lookup()
+    code_of = np.zeros(max(lookup) + 1, np.uint8)
+    for label, name in lookup.items():
+        code_of[label] = index[name]
+
+    src = atlas._download(st.ANNOTATION_URL)
+    header = nrrd.read_header(str(src))
+    nx, ny, nz = (int(v) for v in header["sizes"])
+    if (nx, ny, nz) != atlas.TEMPLATE_SHAPE:
+        raise ValueError(f"annotation is {(nx, ny, nz)}, expected {atlas.TEMPLATE_SHAPE}")
+    dtype = np.dtype(np.uint32).newbyteorder(
+        "<" if header.get("endian", "little") == "little" else ">")
+    # NRRD stores raw data Fortran-ordered: the FIRST axis varies fastest, so
+    # the contiguous slabs are planes of constant z, not of constant x. Reading
+    # ny*nz elements as an x-plane reinterprets the volume and silently yields
+    # a wrong atlas whose value histogram still looks right.
+    slab_bytes = nx * ny * dtype.itemsize
+
+    sx, sy, sz = nx // down, ny // down, nz // down
+    out_vol = np.zeros((sx, sy, sz), np.uint8)
+    with open(src, "rb") as raw_fh:
+        # the NRRD text header precedes the gzip stream and ends at a blank
+        # line, so the compressed data starts only once that line is consumed
+        while True:
+            line = raw_fh.readline()
+            if not line or line.strip() == b"":
+                break
+        fh = gzip.GzipFile(fileobj=raw_fh, mode="rb")
+        for z in range(nz):
+            raw = fh.read(slab_bytes)
+            if len(raw) < slab_bytes:
+                raise ValueError(f"annotation ended early at plane {z}")
+            if z % down or z // down >= sz:
+                continue
+            # within a slab x runs fastest, so a C-order (ny, nx) view is
+            # [y][x]; transposing gives the [x][y] plane this volume wants
+            slab = np.frombuffer(raw, dtype=dtype).reshape(ny, nx).T
+            out_vol[:, :, z // down] = code_of[slab[::down, ::down]]
+
     out.parent.mkdir(parents=True, exist_ok=True)
     np.save(out, out_vol)
     return out

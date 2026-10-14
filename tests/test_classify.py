@@ -55,3 +55,30 @@ def test_overlapping_rules_are_reported():
 
 def test_every_class_has_a_name():
     assert {n for n, _ in CLASSES} == {1, 2, 3, 4, 5, 6}
+
+
+def test_division_volume_axis_order(tmp_path):
+    """NRRD is Fortran-ordered, and misreading it is near-invisible.
+
+    Reading the stream as if the last axis were fastest produced a volume with
+    almost the same value histogram -- 56.18M non-zero voxels against 56.21M --
+    while 53% of voxels named the wrong division. Nothing downstream would have
+    noticed, so the shape of a known structure is checked instead of its totals.
+    """
+    import numpy as np
+
+    from ccf_glass_render import atlas
+    from ccf_glass_render.classify import DIVISIONS, load_division_volume
+
+    cache = atlas.cache_dir() / "divisions_20um.npy"
+    if not cache.exists():
+        pytest.skip("division volume not built; run a classify once")
+    volume, names = load_division_volume(cache.parent)
+
+    code = {v: k for k, v in names.items()}
+    # the cerebellum sits caudal and dorsal; the olfactory-bearing cortex is
+    # rostral. If the axes were transposed these would swap.
+    cb = np.argwhere(volume == code["CB"])
+    ctx = np.argwhere(volume == code["CTX"])
+    assert cb[:, 0].mean() > ctx[:, 0].mean(), "CB should be caudal of CTX"
+    assert set(names.values()) == set(DIVISIONS)
