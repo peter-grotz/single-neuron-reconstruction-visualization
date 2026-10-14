@@ -147,6 +147,20 @@ def _build_cache(args, views: list[str]) -> int:
 
     out = RESULTS / "ccf_cache"
     (out / "views").mkdir(parents=True, exist_ok=True)
+
+    # carry forward whatever the attached cache already holds: a build writes a
+    # fresh directory, so without this the new asset replaces the old views
+    # rather than adding to them, and a previously cached view is lost
+    existing = _cache_root(args.cache)
+    carried = 0
+    for src in sorted((existing / "views").glob("*.npz")):
+        dest = out / "views" / src.name
+        if not dest.exists():
+            shutil.copy2(src, dest)
+            carried += 1
+    if carried:
+        _log(f"carried forward {carried} cached files from {existing}")
+
     profile = RenderProfile()
     for view in views:
         build_view(view, args.resolution, profile, root=out / "views",
@@ -303,12 +317,14 @@ def _classify(args, views: list[str]) -> int:
 
 
 CLASS_COLOURS = {
-    1: "#e01f33",   # cerebellum   -- matched to the lab's existing slide
-    2: "#2b55e0",   # medulla
-    3: "#2fa814",   # midbrain
-    4: "#11a88e",   # thalamus + midbrain
-    5: "#d4188c",   # striatum
-    6: "#e0b000",   # spinal cord
+    1: "#e01f33",   # cerebellum          -- red, as on the lab's slide
+    2: "#2b55e0",   # medulla             -- blue
+    3: "#2fa814",   # midbrain            -- green
+    4: "#ff6e00",   # thalamus + midbrain -- orange; the slide's cyan sat too
+                    #                        close to the medulla blue to tell
+                    #                        the two apart in a dense figure
+    5: "#d4188c",   # striatum / cortical -- magenta
+    6: "#e0b000",   # spinal cord         -- yellow
 }
 """One colour per projection class, following the published figure's scheme."""
 
@@ -319,13 +335,16 @@ def _render_classes(args, views: list[str], by_class: dict, home: str) -> int:
     from matplotlib.colors import to_rgb
 
     from ccf_glass_render.cache import load_view
+    from ccf_glass_render.classify import CLASSES
     from ccf_glass_render.figure import render_cells, save
     from ccf_glass_render.skeletons import Compartment, load_cells
 
     profile = _profile(args)
     cells, colours = {}, {}
+    class_of: dict[int, set[str]] = {}
     for group, members in sorted(by_class.items()):
         rgb = np.array(to_rgb(CLASS_COLOURS[group]), np.float32)
+        class_of[group] = set()
         for cell_id, folder in members:
             files = [f for f in folder.glob("*.swc")
                      if f.name.startswith(cell_id)]
@@ -333,6 +352,7 @@ def _render_classes(args, views: list[str], by_class: dict, home: str) -> int:
             for key, neurons in loaded.items():
                 cells[key] = neurons
                 colours[key] = rgb
+                class_of[group].add(key)
     if not cells:
         _log("error: no cells to render")
         return 2
@@ -353,6 +373,19 @@ def _render_classes(args, views: list[str], by_class: dict, home: str) -> int:
         written = save(image, RESULTS / f"{home}_classes_{view}",
                        dpi=args.dpi, formats=formats)
         _log(f"  {view}  {image.shape[1]} x {image.shape[0]}  -> {written[0].name}")
+
+        # one figure per class as well: in a combined figure the dense classes
+        # bury the sparse ones, and class 2 is eleven cells against ninety-one
+        for group in sorted(by_class):
+            only = {k: v for k, v in cells.items() if k in class_of[group]}
+            if not only:
+                continue
+            image = render_cells(brain, only, profile, colours=colours)
+            written = save(image, RESULTS / f"{home}_class{group}_{view}",
+                           dpi=args.dpi, formats=formats)
+            name = dict(CLASSES)[group]
+            _log(f"  {view} class {group} ({name}, {len(only)} cells) "
+                 f"-> {written[0].name}")
 
         for acronym in wanted:
             try:

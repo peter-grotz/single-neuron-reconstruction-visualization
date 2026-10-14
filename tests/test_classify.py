@@ -82,3 +82,25 @@ def test_division_volume_axis_order(tmp_path):
     ctx = np.argwhere(volume == code["CTX"])
     assert cb[:, 0].mean() > ctx[:, 0].mean(), "CB should be caudal of CTX"
     assert set(names.values()) == set(DIVISIONS)
+
+
+def test_spinal_breaks_an_otherwise_exclusive_class():
+    """A cell reaching cerebellum AND spinal cord is not 'cerebellum only'.
+
+    Ignoring spinal when deciding 'only' labelled 49 such cells class 1.
+    """
+    assert classify(make(["MY", "CB"], spinal=5.0)) is None
+    assert classify(make(["MY", "CB"], spinal=0.0)) == 1
+    assert classify(make(["MY"], spinal=5.0)) == 6
+
+
+def test_spinal_does_not_block_the_inclusive_classes():
+    """Classes 3-5 ask whether a target is present, not whether it is alone."""
+    assert classify(make(["MY", "MB"], spinal=5.0)) == 3
+    assert classify(make(["MY", "STR"], spinal=5.0)) == 5
+
+
+def test_cortex_joins_striatum_in_class_5():
+    assert classify(make(["MY", "CTX"])) == 5
+    assert classify(make(["MY", "STR"])) == 5
+    assert classify(make(["MY", "CTX", "MB"])) == 5
