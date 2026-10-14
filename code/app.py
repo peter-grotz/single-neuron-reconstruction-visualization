@@ -212,6 +212,132 @@ def _render(args, views: list[str]) -> int:
     return 0
 
 
+def _classify(args, views: list[str]) -> int:
+    """Group every cell with a soma in one division by where its axon goes.
+
+    Scans every mounted reconstruction asset rather than one subject: the
+    classes are a population statement, so the cells come from wherever they
+    are. Writes the per-cell measurements alongside the figures so the
+    grouping can be checked without re-running the scan.
+    """
+    import csv
+    from collections import Counter
+
+    from ccf_glass_render.classify import (
+        CLASSES,
+        _division_lookup,
+        ambiguous,
+        classify,
+        project,
+    )
+    from ccf_glass_render.skeletons import load_cells
+    from ccf_glass_render.sources import resolve
+
+    home = args.soma_region or "MY"
+    assets = _asset_dirs(_cache_root(args.cache))
+    if args.subject:
+        assets = _pick(assets, args.subject)
+    _log(f"scanning {len(assets)} assets for somata in {home}")
+
+    lookup = _division_lookup()
+    rows, by_class = [], {}
+    for n, asset in enumerate(assets, 1):
+        try:
+            source = resolve(str(asset), subdir=args.subdir or None)
+        except (FileNotFoundError, ValueError) as exc:
+            _log(f"  [{n}/{len(assets)}] {asset.name}: skipped -- {exc.args[0][:90]}")
+            continue
+        cells = load_cells(source.files)
+        kept = 0
+        for cell_id, neurons in cells.items():
+            whole = max(neurons, key=len)
+            p = project(whole, lookup=lookup)
+            if p.soma_division != home:
+                continue
+            kept += 1
+            group = classify(p, local=home)
+            rows.append({
+                "cell_id": cell_id, "asset": source.asset_name,
+                "soma_division": p.soma_division, "class": group or "",
+                "class_name": dict(CLASSES).get(group, ""),
+                "also_matches": " ".join(str(x) for x in ambiguous(p, home)),
+                "axon_mm": round(p.total_mm, 2),
+                "spinal_mm": round(p.spinal_mm, 2),
+                "targets": " ".join(sorted(p.targets)),
+                **{f"mm_{d}": round(p.length_mm.get(d, 0.0), 2)
+                   for d in sorted(p.length_mm)},
+            })
+            if group:
+                by_class.setdefault(group, []).append((cell_id, source.local))
+        _log(f"  [{n}/{len(assets)}] {source.asset_name}: {kept} soma in {home}")
+
+    if not rows:
+        _log(f"error: no cells with a soma in {home} across {len(assets)} assets")
+        return 2
+
+    counts = Counter(r["class"] for r in rows)
+    _log("")
+    for number, name in CLASSES:
+        _log(f"  class {number} {name:24s} {counts.get(number, 0):4d}")
+    _log(f"  {'unclassified':31s} {counts.get('', 0):4d}")
+    multi = sum(1 for r in rows if len(r["also_matches"].split()) > 1)
+    _log(f"  matched more than one rule   {multi:4d}")
+
+    fields = sorted({k for r in rows for k in r})
+    with open(RESULTS / f"{home}_projection_classes.csv", "w", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=fields)
+        writer.writeheader()
+        writer.writerows(rows)
+    _log(f"wrote {RESULTS / f'{home}_projection_classes.csv'}")
+
+    return _render_classes(args, views, by_class, home)
+
+
+CLASS_COLOURS = {
+    1: "#e01f33",   # cerebellum   -- matched to the lab's existing slide
+    2: "#2b55e0",   # medulla
+    3: "#2fa814",   # midbrain
+    4: "#11a88e",   # thalamus + midbrain
+    5: "#d4188c",   # striatum
+    6: "#e0b000",   # spinal cord
+}
+"""One colour per projection class, following the published figure's scheme."""
+
+
+def _render_classes(args, views: list[str], by_class: dict, home: str) -> int:
+    """One figure per view, every cell coloured by its projection class."""
+    import numpy as np
+    from matplotlib.colors import to_rgb
+
+    from ccf_glass_render.cache import load_view
+    from ccf_glass_render.figure import render_cells, save
+    from ccf_glass_render.skeletons import Compartment, load_cells
+
+    profile = _profile(args)
+    cells, colours = {}, {}
+    for group, members in sorted(by_class.items()):
+        rgb = np.array(to_rgb(CLASS_COLOURS[group]), np.float32)
+        for cell_id, folder in members:
+            files = [f for f in folder.glob("*.swc")
+                     if f.name.startswith(cell_id)]
+            loaded = load_cells(files, Compartment(args.compartment))
+            for key, neurons in loaded.items():
+                cells[key] = neurons
+                colours[key] = rgb
+    if not cells:
+        _log("error: no cells to render")
+        return 2
+    _log(f"rendering {len(cells)} cells in {len(by_class)} classes")
+
+    for view in views:
+        brain = load_view(view, args.resolution, root=_cache_root(args.cache) / "views")
+        image = render_cells(brain, cells, profile, colours=colours)
+        written = save(image, RESULTS / f"{home}_classes_{view}",
+                       dpi=args.dpi, formats=tuple(_csv(args.formats) or ("png", "svg")))
+        _log(f"  {view}  {image.shape[1]} x {image.shape[0]}  -> {written[0].name}")
+    return 0
+
+
 def _profile(args):
     """Build the render profile from panel fields."""
     from dataclasses import replace
@@ -326,7 +452,8 @@ def _check_ordered(name: str, value: str) -> None:
 def main(argv: list[str] | None = None) -> int:
     """Parse App Panel parameters and dispatch."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--mode", default="render", choices=["render", "build_cache"])
+    parser.add_argument("--mode", default="render",
+                        choices=["render", "build_cache", "classify"])
     parser.add_argument("--views", default="sagittal,iso")
     parser.add_argument("--resolution", type=float, default=10.0)
     parser.add_argument("--colors", default="")
@@ -337,6 +464,9 @@ def main(argv: list[str] | None = None) -> int:
                         "--cell_morphology_type", dest="compartment", default="all")
     parser.add_argument("--structure", default="")
     parser.add_argument("--cells", default="")
+    parser.add_argument("--soma-region", "--soma_region", dest="soma_region",
+                        default="MY",
+                        help="CCF division the soma must sit in, for classify mode")
     parser.add_argument("--subject", default="",
                         help="subject id(s) to render when several assets are "
                              "mounted, e.g. 720165")
@@ -366,6 +496,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.mode == "build_cache":
             return _build_cache(args, views)
+        if args.mode == "classify":
+            return _classify(args, views)
         return _render(args, views)
     except (FileNotFoundError, KeyError, ValueError) as exc:
         _log(f"error: {exc.args[0] if exc.args else exc}")
