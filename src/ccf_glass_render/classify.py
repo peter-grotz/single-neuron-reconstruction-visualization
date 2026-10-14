@@ -177,13 +177,22 @@ def build_division_volume(out: Path, down: int = DIVISION_DOWN) -> Path:
 
 
 def load_division_volume(root: Path, down: int = DIVISION_DOWN):
-    """Return (volume, code->name) from a cache, building it if absent."""
-    path = Path(root) / DIVISION_FILE
-    if not path.exists():
-        build_division_volume(path, down)
-    volume = np.load(path, mmap_mode="r")
+    """Return (volume, code->name), building the volume if it is not cached.
+
+    A data-asset mount is read-only, so when the volume is not already in the
+    cache it is built into the writable cache directory instead of failing.
+    Building takes a couple of seconds plus the annotation download, which is
+    worth paying rather than refusing to run.
+    """
     names = {i + 1: name for i, name in enumerate(DIVISIONS)}
-    return volume, names
+    cached = Path(root) / DIVISION_FILE
+    if cached.exists():
+        return np.load(cached, mmap_mode="r"), names
+
+    fallback = atlas.cache_dir() / DIVISION_FILE
+    if not fallback.exists():
+        build_division_volume(fallback, down)
+    return np.load(fallback, mmap_mode="r"), names
 
 
 def _division_lookup() -> dict[int, str]:

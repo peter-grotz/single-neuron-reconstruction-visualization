@@ -156,6 +156,11 @@ def _build_cache(args, views: list[str]) -> int:
             build_structures(view, args.resolution, [acronym],
                              root=out / "views", scratch=SCRATCH / "build")
 
+    from ccf_glass_render.classify import DIVISION_FILE, build_division_volume
+
+    _log("building the division volume")
+    build_division_volume(out / DIVISION_FILE)
+
     # the structure graph is small and lets `find` work offline later
     graph = Path(os.environ["CCF_CACHE"]) / "structure_graph.json"
     if graph.exists():
@@ -331,12 +336,34 @@ def _render_classes(args, views: list[str], by_class: dict, home: str) -> int:
         return 2
     _log(f"rendering {len(cells)} cells in {len(by_class)} classes")
 
+    from ccf_glass_render.cache import load_structures
+
+    views_root = _cache_root(args.cache) / "views"
+    formats = tuple(_csv(args.formats) or ("png", "svg"))
+    # a plain figure always, plus one per structure asked for. The home region
+    # is added by default when it happens to be cached, since the obvious
+    # question of a class figure is where these cells sit.
+    wanted = _csv(args.structure) or [home]
+
     for view in views:
-        brain = load_view(view, args.resolution, root=_cache_root(args.cache) / "views")
+        brain = load_view(view, args.resolution, root=views_root)
         image = render_cells(brain, cells, profile, colours=colours)
         written = save(image, RESULTS / f"{home}_classes_{view}",
-                       dpi=args.dpi, formats=tuple(_csv(args.formats) or ("png", "svg")))
+                       dpi=args.dpi, formats=formats)
         _log(f"  {view}  {image.shape[1]} x {image.shape[0]}  -> {written[0].name}")
+
+        for acronym in wanted:
+            try:
+                overlay = load_structures(view, args.resolution, [acronym],
+                                          root=views_root)
+            except (FileNotFoundError, KeyError) as exc:
+                _log(f"  {view} + {acronym}: skipped -- {exc.args[0][:70]}")
+                continue
+            image = render_cells(brain, cells, profile, colours=colours,
+                                 structures=overlay)
+            written = save(image, RESULTS / f"{home}_classes_{view}_{acronym}",
+                           dpi=args.dpi, formats=formats)
+            _log(f"  {view} + {acronym}  -> {written[0].name}")
     return 0
 
 
