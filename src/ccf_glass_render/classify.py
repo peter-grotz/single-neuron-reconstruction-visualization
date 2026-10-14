@@ -12,6 +12,7 @@ of a spinal projection, which is why it is defined geometrically here.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import numpy as np
 
@@ -106,6 +107,49 @@ def ambiguous(p: Projection, local: str = "MY") -> list[int]:
     return hits
 
 
+DIVISION_FILE = "divisions_20um.npy"
+"""Name of the precomputed division volume inside a cache."""
+
+DIVISION_DOWN = 2
+"""Built at 20 um: division boundaries are coarse, and this is 8x smaller."""
+
+
+def build_division_volume(out: Path, down: int = DIVISION_DOWN) -> Path:
+    """Reduce the CCF annotation to one byte per voxel, naming its division.
+
+    The annotation is 4.8 GB as uint32 and loading it to classify a few hundred
+    cells was killing the machine. Only the major division matters here, and
+    there are nine of them, so a uint8 volume at 20 um is 150 MB and answers
+    the same question. Built once and carried in the cache asset, so a
+    classification run never decodes the annotation at all.
+    """
+    lookup = _division_lookup()
+    annotation = st.annotation(down)
+    index = {name: i + 1 for i, name in enumerate(DIVISIONS)}
+    out_vol = np.zeros(annotation.shape, np.uint8)
+    for start in range(0, annotation.shape[0], 100):
+        block = np.asarray(annotation[start:start + 100])
+        coded = np.zeros(block.shape, np.uint8)
+        for label in np.unique(block):
+            name = lookup.get(int(label))
+            if name:
+                coded[block == label] = index[name]
+        out_vol[start:start + 100] = coded
+    out.parent.mkdir(parents=True, exist_ok=True)
+    np.save(out, out_vol)
+    return out
+
+
+def load_division_volume(root: Path, down: int = DIVISION_DOWN):
+    """Return (volume, code->name) from a cache, building it if absent."""
+    path = Path(root) / DIVISION_FILE
+    if not path.exists():
+        build_division_volume(path, down)
+    volume = np.load(path, mmap_mode="r")
+    names = {i + 1: name for i, name in enumerate(DIVISIONS)}
+    return volume, names
+
+
 def _division_lookup() -> dict[int, str]:
     """Map every CCF label to the major division containing it."""
     out: dict[int, str] = {}
@@ -131,15 +175,19 @@ def _segment_lengths(neuron: Neuron) -> tuple[np.ndarray, np.ndarray]:
     return (start + end) / 2.0, np.linalg.norm(end - start, axis=1)
 
 
-def project(neuron: Neuron, down: int = 1,
-            lookup: dict[int, str] | None = None) -> Projection:
+def project(neuron: Neuron, down: int = DIVISION_DOWN,
+            volume=None, names: dict[int, str] | None = None) -> Projection:
     """Measure one cell's axon length per division.
 
     Length is attributed by each segment's midpoint rather than by its nodes,
     so a long segment crossing a boundary is counted once, where it mostly lies.
+
+    `volume` and `names` come from :func:`load_division_volume`; pass them in
+    rather than letting every cell rebuild them.
     """
-    lookup = _division_lookup() if lookup is None else lookup
-    annotation = st.annotation(down)
+    if volume is None:
+        volume, names = load_division_volume(atlas.cache_dir(), down)
+    annotation = volume
     voxel = atlas.VOXEL_UM * down
 
     axon = neuron.select(Compartment.AXON)
@@ -153,13 +201,13 @@ def project(neuron: Neuron, down: int = 1,
         if inside.any():
             idx = np.clip((mid[inside] / voxel).astype(int), 0,
                           np.array(annotation.shape) - 1)
-            labels = np.asarray(annotation[idx[:, 0], idx[:, 1], idx[:, 2]])
+            codes = np.asarray(annotation[idx[:, 0], idx[:, 1], idx[:, 2]])
             lengths = length[inside]
-            for label in np.unique(labels):
-                name = lookup.get(int(label))
+            for code in np.unique(codes):
+                name = names.get(int(code))
                 if name:
                     per[name] = per.get(name, 0.0) + float(
-                        lengths[labels == label].sum()) / 1000.0
+                        lengths[codes == code].sum()) / 1000.0
 
     total = sum(per.values()) + spinal
     floor = max(MIN_LENGTH_MM, MIN_FRACTION * total)
@@ -170,6 +218,6 @@ def project(neuron: Neuron, down: int = 1,
     if len(soma):
         idx = np.clip((soma[0] / voxel).astype(int), 0,
                       np.array(annotation.shape) - 1)
-        division = lookup.get(int(annotation[idx[0], idx[1], idx[2]]))
+        division = names.get(int(annotation[idx[0], idx[1], idx[2]]))
 
     return Projection(neuron.cell_id, division, per, spinal, total, targets)

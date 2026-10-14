@@ -225,21 +225,23 @@ def _classify(args, views: list[str]) -> int:
 
     from ccf_glass_render.classify import (
         CLASSES,
-        _division_lookup,
         ambiguous,
         classify,
+        load_division_volume,
         project,
     )
     from ccf_glass_render.skeletons import load_cells
     from ccf_glass_render.sources import resolve
 
     home = args.soma_region or "MY"
-    assets = _asset_dirs(_cache_root(args.cache))
+    cache_root = _cache_root(args.cache)
+    assets = _asset_dirs(cache_root)
     if args.subject:
         assets = _pick(assets, args.subject)
     _log(f"scanning {len(assets)} assets for somata in {home}")
 
-    lookup = _division_lookup()
+    volume, names = load_division_volume(cache_root)
+    _log(f"division volume {volume.shape} from {cache_root}")
     rows, by_class = [], {}
     for n, asset in enumerate(assets, 1):
         try:
@@ -251,7 +253,7 @@ def _classify(args, views: list[str]) -> int:
         kept = 0
         for cell_id, neurons in cells.items():
             whole = max(neurons, key=len)
-            p = project(whole, lookup=lookup)
+            p = project(whole, volume=volume, names=names)
             if p.soma_division != home:
                 continue
             kept += 1
