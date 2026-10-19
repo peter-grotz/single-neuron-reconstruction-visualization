@@ -28,6 +28,23 @@ from .profile import VIEWS, GlassProfile, RenderProfile, canonical_view, pixel_s
 PAD_FRACTION = 0.10
 """Headroom added below the object, as a fraction of its height."""
 
+# --- structure material -------------------------------------------------
+SPECULAR = 0.29
+"""Highlight strength. The shell's own is brighter; a structure sits inside it
+and competes if it is as shiny."""
+FRESNEL_GAIN = 0.34
+RIM_DARKEN = 1.0
+"""Grazing-angle darkening, which is what draws the silhouette. A synthetic
+2D outline was tried instead and broke into fragments, because the coverage it
+was derived from is nearly binary at this blur."""
+HUE_FADE = 0.40
+"""How far the CCF colour is pulled toward white before shading."""
+RAMP_LOW, RAMP_SPAN = 0.34, 0.30
+"""Coverage ramp across the boundary, the same mapping the shell uses."""
+COVERAGE_BLUR = 0.10
+ALPHA_FACE, ALPHA_EDGE = 0.28, 0.97
+"""Opacity face-on and edge-on."""
+
 
 @dataclass(frozen=True)
 class BrainView:
@@ -265,17 +282,20 @@ def build_structures(view: str, resolution_um: float, acronyms: list[str],
 
 def _shade_structure(field: np.ndarray, tint: np.ndarray, opacity: float,
                      voxel_um: float, scale: float) -> dict[str, np.ndarray]:
-    """Shade a structure's near surface, plus its depth and opacity.
+    """Shade a structure as a glassy body, plus its depth and opacity.
 
-    The surface is solved the way the glass shell's is -- sub-voxel depth and
-    real normals -- because the earlier shortcut showed. Depth came from an
-    integer argmax, so on a structure only tens of voxels thick the shading
-    terraced in visible bands, and the alpha was clipped to saturation, which
-    left 93% of MD's pixels at one value and a stepped silhouette.
+    The material borrows from the shell -- a specular highlight, a Fresnel
+    term that makes the surface clear face-on and dense edge-on, and the
+    shell's own grazing-angle darkening for the silhouette -- but takes its
+    hue from a direct tint rather than from absorption. Absorbing the colour
+    through the body makes the hue track thickness, so a thin structure comes
+    out pale at the edges and saturated through the middle, which reads as
+    inconsistent rather than as depth.
 
-    The shading itself is a lit solid rather than glass: the structure sits
-    inside the shell, and a second dielectric treatment makes the two surfaces
-    compete rather than reading as one body seen through another.
+    The surface is solved the way the shell's is, with sub-voxel depth and
+    real normals. The earlier shortcut -- an integer argmax and a clipped
+    alpha -- terraced the shading into bands on a body only tens of voxels
+    thick and left 93% of MD's covered pixels at one alpha.
     """
     from .glass import _surface_normals
 
@@ -293,7 +313,8 @@ def _shade_structure(field: np.ndarray, tint: np.ndarray, opacity: float,
     low = field[rows, cols, below]
     high = field[rows, cols, first]
     gap = high - low
-    frac = np.where(np.abs(gap) > 1e-6, (0.5 - low) / np.where(np.abs(gap) > 1e-6, gap, 1.0), 0.0)
+    frac = np.where(np.abs(gap) > 1e-6,
+                    (0.5 - low) / np.where(np.abs(gap) > 1e-6, gap, 1.0), 0.0)
     front = np.where(hit, first - 1 + np.clip(frac, 0, 1), np.inf).astype(np.float32)
 
     normal = _surface_normals(field, first, rows, cols, 1.0 * scale)
@@ -301,13 +322,27 @@ def _shade_structure(field: np.ndarray, tint: np.ndarray, opacity: float,
     key = key / np.linalg.norm(key)
     lambert = np.clip(normal @ key, 0, 1)
     facing = np.clip(np.abs(normal @ np.array([0.0, 0.0, 1.0])), 0, 1)
-    rim = (1.0 - facing) ** 3
-    lit = 0.55 + 0.55 * lambert + 0.25 * rim
-    rgb = np.clip(tint[None, None, :] * lit[..., None] + 0.10 * rim[..., None],
-                  0, 1).astype(np.float32)
+    fresnel = (1.0 - facing) ** 4
+    rim = (1.0 - facing) ** 8            # the shell's own silhouette term
+    half = key + np.array([0.0, 0.0, -1.0])
+    half = half / np.linalg.norm(half)
+    specular = np.clip(normal @ half, 0, 1)
 
-    # coverage from the smoothed field, so the edge is a gradient not a step
-    coverage = ndi.gaussian_filter(np.clip(field.max(axis=2), 0, 1) * hit, 0.5 * scale)
-    alpha = (coverage * opacity).astype(np.float32)
+    hue = tint * (1.0 - HUE_FADE) + HUE_FADE
+    lit = 0.62 + 0.42 * lambert + FRESNEL_GAIN * fresnel
+    rgb = np.clip(hue[None, None, :] * lit[..., None]
+                  + SPECULAR * (specular**40)[..., None]
+                  + 0.10 * fresnel[..., None], 0, 1)
+    rgb = (rgb * (1.0 - RIM_DARKEN * rim)[..., None]).astype(np.float32)
+
+    # ramp coverage across the boundary, as the shell does, so the silhouette
+    # stays crisp once blurred
+    coverage = ndi.gaussian_filter(
+        np.clip((field.max(axis=2) - RAMP_LOW) / RAMP_SPAN, 0, 1) * hit,
+        COVERAGE_BLUR * scale)
+    # clear face-on, dense at a grazing edge: what makes it read as glass
+    alpha = (coverage * (ALPHA_FACE + (ALPHA_EDGE - ALPHA_FACE) * fresnel)
+             * (opacity / 0.55)).astype(np.float32)
     transmittance = np.exp(-1.6 * opacity * thickness_mm).astype(np.float32)
-    return {"rgb": rgb, "alpha": alpha, "front": front, "transmittance": transmittance}
+    return {"rgb": rgb, "alpha": np.clip(alpha, 0, 1),
+            "front": front, "transmittance": transmittance}
