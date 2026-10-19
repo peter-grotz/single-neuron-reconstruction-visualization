@@ -18,11 +18,15 @@ import numpy as np
 # Camera angles in (yaw, pitch) degrees, applied to the CCF array axes.
 VIEWS: dict[str, tuple[float, float]] = {
     "sagittal": (0.0, 0.0),
-    "coronal": (90.0, 0.0),
+    "coronal": (-90.0, 0.0),
     "horizontal": (0.0, 90.0),
     "iso": (-38.0, 20.0),
 }
-"""The three anatomical planes, plus a three-quarter view."""
+"""The three anatomical planes, plus a three-quarter view.
+
+Coronal looks from the front: the camera sits rostral and faces caudally, which
+is how a coronal section is conventionally read. Yaw +90 gives the same plane
+seen from behind, with left and right swapped."""
 
 VIEW_ALIASES: dict[str, str] = {
     "dorsal": "horizontal", "axial": "horizontal", "transverse": "horizontal",

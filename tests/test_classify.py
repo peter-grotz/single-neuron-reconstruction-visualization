@@ -29,7 +29,7 @@ def make(targets, spinal=0.0, cell="N001-1"):
         (["MY", "MB"], 0.0, 3),
         (["MY", "MB", "TH"], 0.0, 4),
         (["MY", "STR", "MB"], 0.0, 5),     # striatum outranks midbrain
-        (["MY", "TH"], 0.0, None),         # thalamus alone fits no class
+        (["MY", "TH"], 0.0, 4),            # thalamus alone is class 4
     ],
 )
 def test_class_assignment(targets, spinal, expected):
@@ -48,9 +48,9 @@ def test_spinal_needs_more_than_a_trace():
 
 
 def test_overlapping_rules_are_reported():
-    """A cell reaching striatum and midbrain satisfies two rules."""
-    assert sorted(ambiguous(make(["MY", "STR", "MB"]))) == [3, 5]
-    assert classify(make(["MY", "STR", "MB"])) == 5
+    """Striatum outranks the others when a cell reaches several."""
+    assert sorted(ambiguous(make(["MY", "STR", "TH"]))) == [4, 5]
+    assert classify(make(["MY", "STR", "TH"])) == 5
 
 
 def test_every_class_has_a_name():
@@ -84,20 +84,33 @@ def test_division_volume_axis_order(tmp_path):
     assert set(names.values()) == set(DIVISIONS)
 
 
-def test_spinal_breaks_an_otherwise_exclusive_class():
-    """A cell reaching cerebellum AND spinal cord is not 'cerebellum only'.
-
-    Ignoring spinal when deciding 'only' labelled 49 such cells class 1.
-    """
-    assert classify(make(["MY", "CB"], spinal=5.0)) is None
+def test_spinal_does_not_displace_a_named_target():
+    """Per the spec a class covers 'X', 'X + MY', 'X + MY + spinal' alike."""
+    assert classify(make(["MY", "CB"], spinal=5.0)) == 1
     assert classify(make(["MY", "CB"], spinal=0.0)) == 1
     assert classify(make(["MY"], spinal=5.0)) == 6
+    assert classify(make(["MY"], spinal=0.0)) == 2
+
+
+def test_pons_is_local_to_a_medullary_soma():
+    """Nearly every medullary cell crosses into pons; counting it as a target
+    emptied the midbrain and thalamus classes outright."""
+    assert classify(make(["MY", "P"])) == 2
+    assert classify(make(["MY", "P", "CB"])) == 1
+    assert classify(make(["MY", "P", "MB"])) == 3
+    assert classify(make(["MY", "P"], spinal=5.0)) == 6
 
 
 def test_spinal_does_not_block_the_inclusive_classes():
     """Classes 3-5 ask whether a target is present, not whether it is alone."""
     assert classify(make(["MY", "MB"], spinal=5.0)) == 3
     assert classify(make(["MY", "STR"], spinal=5.0)) == 5
+
+
+def test_labels_do_not_claim_exclusivity():
+    """'cerebellum only' was false of 60 of its 167 cells, which also reach
+    the spinal cord, so no label promises a cell goes nowhere else."""
+    assert not any("only" in name for _, name in CLASSES)
 
 
 def test_cortex_joins_striatum_in_class_5():

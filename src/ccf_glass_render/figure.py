@@ -45,7 +45,8 @@ def render_cells(brain: BrainView, cells: dict[str, list[Neuron]],
                  profile: RenderProfile,
                  colours: dict[str, np.ndarray] | None = None,
                  target_um: float | None = None,
-                 structures: StructureView | None = None) -> np.ndarray:
+                 structures: StructureView | None = None,
+                 extent: dict[str, list[Neuron]] | None = None) -> np.ndarray:
     """Composite `cells` onto `brain` and return the RGB image.
 
     Parameters
@@ -69,7 +70,11 @@ def render_cells(brain: BrainView, cells: dict[str, list[Neuron]],
     # projection runs 3 mm past the caudal bound of the atlas -- and anything
     # outside the canvas is dropped by the splat without a word. Grow the
     # canvas to hold the cells before drawing them.
-    points = np.vstack([brain.project(n.xyz) for ns in cells.values() for n in ns])
+    # frame on `extent` when given: rendering one class at a time otherwise
+    # frames each on its own cells, so a class with spinal projections comes
+    # out far wider than one without and the two cannot be compared
+    framing = extent if extent is not None else cells
+    points = np.vstack([brain.project(n.xyz) for ns in framing.values() for n in ns])
     pad_top = max(int(np.ceil(-points[:, 0].min())) + 1, 0)
     pad_left = max(int(np.ceil(-points[:, 1].min())) + 1, 0)
     pad_bottom = max(int(np.ceil(points[:, 0].max())) + 2 - base.shape[0], 0)
@@ -117,10 +122,31 @@ def _lay_structure(base: np.ndarray, structures: StructureView, factor: int) -> 
     return np.clip(base * (1 - alpha) + rgb * alpha, 0, 1)
 
 
+def crop_box(image: np.ndarray, pad: int = 24, background: float = 0.995):
+    """The crop `save` would apply, so several figures can share one."""
+    ink = image.min(axis=2) < background
+    if not ink.any():
+        return (0, image.shape[0], 0, image.shape[1])
+    rows, cols = np.where(ink)
+    return (max(int(rows.min()) - pad, 0),
+            min(int(rows.max()) + pad + 1, image.shape[0]),
+            max(int(cols.min()) - pad, 0),
+            min(int(cols.max()) + pad + 1, image.shape[1]))
+
+
 def save(image: np.ndarray, stem: Path, dpi: int = 300,
-         formats: tuple[str, ...] = ("png", "svg"), pad: int = 24) -> list[Path]:
-    """Write a borderless figure in each requested format."""
-    image = splat.crop(image, pad=pad)
+         formats: tuple[str, ...] = ("png", "svg"), pad: int = 24,
+         box: tuple[int, int, int, int] | None = None) -> list[Path]:
+    """Write a borderless figure in each requested format.
+
+    `box` crops to a given rectangle rather than to this image's own content,
+    which is what keeps a set of figures the same size.
+    """
+    if box is not None:
+        r0, r1, c0, c1 = box
+        image = image[r0:r1, c0:c1]
+    else:
+        image = splat.crop(image, pad=pad)
     height, width = image.shape[:2]
     fig = plt.figure(figsize=(width / dpi, height / dpi), dpi=dpi, facecolor="white")
     ax = fig.add_axes([0, 0, 1, 1])

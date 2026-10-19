@@ -50,18 +50,31 @@ class Projection:
 
 
 CLASSES: tuple[tuple[int, str], ...] = (
-    (1, "cerebellum only"),
-    (2, "medulla only"),
+    (1, "cerebellum"),
+    (2, "local (medulla / pons)"),
     (3, "midbrain, no thalamus"),
-    (4, "thalamus + midbrain"),
+    (4, "thalamus +/- midbrain"),
     (5, "striatum / cortical"),
-    (6, "spinal cord only"),
+    (6, "spinal cord, no other target"),
 )
+"""Each class names where a cell goes *beyond its own hindbrain neighbourhood*.
+
+The labels avoid "only" deliberately. Once pons counts as local and a spinal
+projection no longer disqualifies, "cerebellum only" was false of 60 of its 167
+cells, which also reach the spinal cord, and "medulla only" was false of the 29
+of 40 that reach pons."""
 
 SPINAL = "SPINAL"
-"""Pseudo-target for axon leaving the atlas caudally, so the exclusive classes
-account for it. Without this a cell reaching cerebellum *and* spinal cord was
-labelled "cerebellum only", which 49 cells were."""
+"""Pseudo-target for axon leaving the atlas caudally."""
+
+LOCAL_WITH = {"MY": ("P",), "P": ("MY",)}
+"""Divisions treated as local alongside the soma's own.
+
+Pons and medulla are both hindbrain and sit against each other, and nearly
+every medullary cell arborises across the pair: counting P as a target empties
+the midbrain and thalamus classes outright, since no MB-projecting medullary
+cell avoids the pons. So a class describes where a cell goes *beyond* its own
+hindbrain neighbourhood."""
 
 FOREBRAIN = ("STR", "CTX")
 """Class 5 covers striatum and cortex together."""
@@ -81,24 +94,25 @@ def classify(p: Projection, local: str = "MY") -> int | None:
     """
     away = _away(p, local)
 
-    if away == {SPINAL}:
-        return 6
-    if away == {"CB"}:
+    bare = away - {SPINAL}
+
+    if not bare:
+        # nothing beyond the hindbrain: spinal if it leaves caudally, else local
+        return 6 if SPINAL in away else 2
+    if bare == {"CB"}:
         return 1
-    if not away:
-        return 2
-    if away & set(FOREBRAIN):
+    if bare & set(FOREBRAIN):
         return 5
-    if "TH" in away and "MB" in away:
+    if "TH" in bare:
         return 4
-    if "MB" in away:
+    if bare == {"MB"}:
         return 3
     return None
 
 
 def _away(p: Projection, local: str) -> set[str]:
-    """Targets outside the soma's own division, spinal cord included."""
-    away = set(p.targets) - {local}
+    """Targets beyond the soma's own division and its local neighbours."""
+    away = set(p.targets) - {local} - set(LOCAL_WITH.get(local, ()))
     if p.is_spinal:
         away.add(SPINAL)
     return away
@@ -107,18 +121,19 @@ def _away(p: Projection, local: str) -> set[str]:
 def ambiguous(p: Projection, local: str = "MY") -> list[int]:
     """Every class a projection satisfies, to show where the rules overlap."""
     away = _away(p, local)
+    bare = away - {SPINAL}
     hits = []
-    if away == {SPINAL}:
+    if not bare and SPINAL in away:
         hits.append(6)
-    if away == {"CB"}:
+    if bare == {"CB"}:
         hits.append(1)
-    if not away:
+    if not bare and SPINAL not in away:
         hits.append(2)
-    if away & set(FOREBRAIN):
+    if bare & set(FOREBRAIN):
         hits.append(5)
-    if "TH" in away and "MB" in away:
+    if "TH" in bare:
         hits.append(4)
-    if "MB" in away and "TH" not in away:
+    if bare == {"MB"}:
         hits.append(3)
     return hits
 

@@ -142,27 +142,35 @@ def _available(assets: list[Path]) -> list[str]:
 
 def _build_cache(args, views: list[str]) -> int:
     """Prerender views and overlays into /results for capture as an asset."""
-    from ccf_glass_render.cache import build_structures, build_view
+    from ccf_glass_render.cache import build_structures, build_view, cache_path
     from ccf_glass_render.profile import RenderProfile
 
     out = RESULTS / "ccf_cache"
     (out / "views").mkdir(parents=True, exist_ok=True)
 
-    # carry forward whatever the attached cache already holds: a build writes a
+    # Carry forward whatever any mounted cache already holds. A build writes a
     # fresh directory, so without this the new asset replaces the old views
-    # rather than adding to them, and a previously cached view is lost
-    existing = _cache_root(args.cache)
+    # instead of adding to them -- which is how a cache of sagittal and iso
+    # came to be replaced by one holding only coronal and horizontal.
     carried = 0
-    for src in sorted((existing / "views").glob("*.npz")):
-        dest = out / "views" / src.name
-        if not dest.exists():
-            shutil.copy2(src, dest)
-            carried += 1
+    for mount in sorted(DATA.glob("*")) if DATA.is_dir() else []:
+        if not (mount / "views").is_dir():
+            continue
+        for src in sorted((mount / "views").glob("*.npz")):
+            dest = out / "views" / src.name
+            if not dest.exists():
+                shutil.copy2(src, dest)
+                carried += 1
+        if (mount / "structure_graph.json").exists():
+            shutil.copy2(mount / "structure_graph.json", out / "structure_graph.json")
     if carried:
-        _log(f"carried forward {carried} cached files from {existing}")
+        _log(f"carried forward {carried} cached files")
 
     profile = RenderProfile()
     for view in views:
+        if cache_path(view, args.resolution, out / "views").exists():
+            _log(f"[{view}] already cached, kept")
+            continue
         build_view(view, args.resolution, profile, root=out / "views",
                    scratch=SCRATCH / "build")
     for acronym in _csv(args.structure):
