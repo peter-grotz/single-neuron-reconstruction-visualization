@@ -22,6 +22,10 @@
 			"mount": "exaSPIM_721828_processed_reconstruction_2026_03_25"
 		},
 		{
+			"id": "1041300f-240b-439a-aa6a-8343ae8a7e48",
+			"mount": "ccf_cache_1"
+		},
+		{
 			"id": "1607f123-6e27-4e5c-8bd6-65ad7c46c991",
 			"mount": "exaSPIM_754612_processed_reconstructions_2026_03_12"
 		},
@@ -108,10 +112,6 @@
 		{
 			"id": "6e9639dd-f3cc-4d0f-8c59-f016d9823bc6",
 			"mount": "exaSPIM_651895_processed_reconstructions_2026_03_15"
-		},
-		{
-			"id": "714793b5-0772-46bb-aa13-c2e55f06a29f",
-			"mount": "ccf_cache_v1"
 		},
 		{
 			"id": "73e112ec-24a9-4393-9ac0-ff5e2d267574",
@@ -208,10 +208,6 @@
 		{
 			"id": "e68e3c1f-5bc7-4b43-b40c-d4aa48bb3e1a",
 			"mount": "exaSPIM_751473_processed_reconstructions_2026_03_10"
-		},
-		{
-			"id": "ed0ac599-1154-42b8-a7e6-72321c717a62",
-			"mount": "ccf_cache"
 		},
 		{
 			"id": "f1465999-d81f-4026-838f-c27ab30987ba",
