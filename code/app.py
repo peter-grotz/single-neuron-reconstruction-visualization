@@ -37,6 +37,22 @@ def _log(message: str) -> None:
     print(message, flush=True)
 
 
+WHOLE_BRAIN = {"root", "997", "grey", "8"}
+"""Structures that are the brain itself, or nearly: drawing one as an overlay
+fills the shell it sits in and costs a full-frame build to say nothing."""
+
+
+def _structures(value: str | None) -> list[str]:
+    """Requested structures, with whole-brain entries dropped."""
+    out, skipped = [], []
+    for name in _csv(value):
+        (skipped if name.strip().lower() in WHOLE_BRAIN else out).append(name)
+    for name in skipped:
+        _log(f"ignoring structure {name!r}: it is the whole brain, which the "
+             "glass shell already shows")
+    return out
+
+
 def _blank(cast):
     """An argparse type that reads a cleared panel field as 'unset'.
 
@@ -189,7 +205,7 @@ def _build_cache(args, views: list[str]) -> int:
             continue
         build_view(view, args.resolution, profile, root=out / "views",
                    scratch=SCRATCH / "build")
-    for acronym in _csv(args.structure):
+    for acronym in _structures(args.structure):
         for view in views:
             build_structures(view, args.resolution, [acronym],
                              root=out / "views", scratch=SCRATCH / "build")
@@ -244,7 +260,7 @@ def _render(args, views: list[str]) -> int:
         return 2
     _log(f"{len(cells)} cells: {sorted(cells)}")
 
-    wanted = _csv(args.structure)
+    wanted = _structures(args.structure)
     written = []
     for view in views:
         brain = load_view(view, args.resolution, root=cache_root / "views")
@@ -393,7 +409,7 @@ def _render_classes(args, views: list[str], by_class: dict, home: str) -> int:
     # a plain figure always, plus one per structure asked for. The home region
     # is added by default when it happens to be cached, since the obvious
     # question of a class figure is where these cells sit.
-    wanted = _csv(args.structure) or [home]
+    wanted = _structures(args.structure) or [home]
 
     for view in views:
         brain = load_view(view, args.resolution, root=views_root)

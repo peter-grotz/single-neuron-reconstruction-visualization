@@ -246,3 +246,18 @@ def test_blank_soma_region_keeps_everything():
     cells = {"N001-1-AA": [], "N002-1-BB": []}
     args = types.SimpleNamespace(soma_region="", cells="", cache="")
     assert app._by_soma(dict(cells), args) == cells
+
+
+def test_whole_brain_structures_are_ignored():
+    """'root' is all 1327 labels: as an overlay it fills the shell it sits in
+    and costs a full-frame build to say nothing."""
+    assert app._structures("root") == []
+    assert app._structures("997") == []
+    assert app._structures("grey") == []
+    assert app._structures("ROOT") == []
+
+
+def test_other_structures_survive_alongside_root():
+    assert app._structures("root+MD") == ["MD"]
+    assert app._structures("MD") == ["MD"]
+    assert app._structures("") == []
