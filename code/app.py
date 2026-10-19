@@ -194,7 +194,7 @@ def _build_cache(args, views: list[str]) -> int:
 def _render(args, views: list[str]) -> int:
     """Render every attached reconstruction asset."""
     from ccf_glass_render import provenance
-    from ccf_glass_render.cache import load_structures, load_view
+    from ccf_glass_render.cache import load_view
     from ccf_glass_render.figure import render_cells, save
     from ccf_glass_render.skeletons import Compartment, load_cells
     from ccf_glass_render.sources import resolve
@@ -227,8 +227,8 @@ def _render(args, views: list[str]) -> int:
     written = []
     for view in views:
         brain = load_view(view, args.resolution, root=cache_root / "views")
-        overlay = (load_structures(view, args.resolution, wanted,
-                                   root=cache_root / "views") if wanted else None)
+        overlay = (_overlay(view, args.resolution, wanted[0],
+                            cache_root / "views") if wanted else None)
         image = render_cells(brain, cells, profile, structures=overlay)
         written += save(image, RESULTS / f"{args.label}_{view}",
                         dpi=args.dpi, formats=tuple(_csv(args.formats) or ("png", "svg")))
@@ -366,7 +366,6 @@ def _render_classes(args, views: list[str], by_class: dict, home: str) -> int:
         return 2
     _log(f"rendering {len(cells)} cells in {len(by_class)} classes")
 
-    from ccf_glass_render.cache import load_structures
 
     views_root = _cache_root(args.cache) / "views"
     formats = tuple(_csv(args.formats) or ("png", "svg"))
@@ -397,9 +396,8 @@ def _render_classes(args, views: list[str], by_class: dict, home: str) -> int:
 
         for acronym in wanted:
             try:
-                overlay = load_structures(view, args.resolution, [acronym],
-                                          root=views_root)
-            except (FileNotFoundError, KeyError) as exc:
+                overlay = _overlay(view, args.resolution, acronym, views_root)
+            except (KeyError, ValueError) as exc:
                 _log(f"  {view} + {acronym}: skipped -- {exc.args[0][:70]}")
                 continue
             image = render_cells(brain, cells, profile, colours=colours,
@@ -408,6 +406,42 @@ def _render_classes(args, views: list[str], by_class: dict, home: str) -> int:
                            dpi=args.dpi, formats=formats)
             _log(f"  {view} + {acronym}  -> {written[0].name}")
     return 0
+
+
+def _scratch() -> Path:
+    """A writable scratch directory: /scratch in a capsule, else the cache."""
+    try:
+        SCRATCH.mkdir(parents=True, exist_ok=True)
+        probe = SCRATCH / ".w"
+        probe.touch()
+        probe.unlink()
+        return SCRATCH
+    except OSError:
+        return Path(os.environ["CCF_CACHE"]) / "scratch"
+
+
+def _overlay(view: str, resolution: float, acronym: str, views_root: Path):
+    """Load a structure overlay, building it if the cache does not have one.
+
+    A cache mount is read-only and only ever holds the structures someone
+    thought to pre-build, so any other region was simply unavailable. Building
+    on demand costs about a minute and writes to the writable cache, which
+    means any of the 1327 CCF structures can be drawn.
+    """
+    from ccf_glass_render.cache import build_structures, load_structures
+
+    try:
+        return load_structures(view, resolution, [acronym], root=views_root)
+    except FileNotFoundError:
+        pass
+    local = Path(os.environ["CCF_CACHE"]) / "views"
+    try:
+        return load_structures(view, resolution, [acronym], root=local)
+    except FileNotFoundError:
+        _log(f"  building {acronym} for {view}; not in the cache")
+        build_structures(view, resolution, [acronym], root=local,
+                         scratch=_scratch() / "struct")
+        return load_structures(view, resolution, [acronym], root=local)
 
 
 def _profile(args):
