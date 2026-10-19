@@ -126,3 +126,41 @@ def test_available_marks_duplicated_subjects(tmp_path, monkeypatch):
     out = app._available(app._asset_dirs(tmp_path / "nope"))
     assert "685221" in out
     assert any("720165" in x and "x2" in x for x in out)
+
+
+def _fake(*ids):
+    return {i: [] for i in ids}
+
+
+def test_cell_id_without_annotator_initials_matches(monkeypatch):
+    """The initials are part of the filename but nobody remembers them, and
+    stripping them collides for none of the 438 cells in this dataset."""
+    import types
+
+    from ccf_glass_render.profile import RenderProfile
+
+    cells = _fake("N011-685221-SP", "N018-685221-DS")
+    args = types.SimpleNamespace(cells="N011-685221+N018-685221", sample=0)
+    assert sorted(app._select(cells, args, RenderProfile())) == [
+        "N011-685221-SP", "N018-685221-DS"]
+
+
+def test_full_cell_id_still_matches():
+    import types
+
+    from ccf_glass_render.profile import RenderProfile
+
+    cells = _fake("N011-685221-SP")
+    args = types.SimpleNamespace(cells="N011-685221-SP", sample=0)
+    assert list(app._select(cells, args, RenderProfile())) == ["N011-685221-SP"]
+
+
+def test_an_ambiguous_prefix_is_refused_not_guessed():
+    import types
+
+    from ccf_glass_render.profile import RenderProfile
+
+    cells = _fake("N011-685221-SP", "N011-685221-DS")
+    args = types.SimpleNamespace(cells="N011-685221", sample=0)
+    with pytest.raises(ValueError, match="ambiguous cell id"):
+        app._select(cells, args, RenderProfile())

@@ -433,10 +433,29 @@ def _select(cells: dict, args, profile) -> dict:
 
     named = _csv(args.cells)
     if named:
-        missing = set(named) - set(cells)
+        # the annotator initials are part of the filename but nobody remembers
+        # them, so a bare id matches too -- there are no collisions once they
+        # are stripped. An ambiguous prefix is reported rather than guessed.
+        wanted, missing, ambiguous = set(), [], []
+        for name in named:
+            if name in cells:
+                wanted.add(name)
+                continue
+            hits = [k for k in cells if k == name or k.startswith(name + "-")]
+            if len(hits) == 1:
+                wanted.add(hits[0])
+            elif hits:
+                ambiguous.append((name, sorted(hits)))
+            else:
+                missing.append(name)
+        if ambiguous:
+            # raise rather than return a code: this helper's result is used as
+            # the cell map, so a sentinel would be mistaken for one
+            detail = "; ".join(f"{n!r} matches {h}" for n, h in ambiguous)
+            raise ValueError(f"ambiguous cell id: {detail}")
         if missing:
             _log(f"warning: not in the attached assets: {sorted(missing)}")
-        cells = {k: v for k, v in cells.items() if k in set(named)}
+        cells = {k: v for k, v in cells.items() if k in wanted}
     if args.sample and args.sample < len(cells):
         keep = random.Random(profile.skeleton.seed).sample(sorted(cells), args.sample)
         cells = {k: cells[k] for k in keep}
