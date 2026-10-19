@@ -164,3 +164,42 @@ def test_an_ambiguous_prefix_is_refused_not_guessed():
     args = types.SimpleNamespace(cells="N011-685221", sample=0)
     with pytest.raises(ValueError, match="ambiguous cell id"):
         app._select(cells, args, RenderProfile())
+
+
+def _args(cells="", sample=None):
+    import types
+
+    return types.SimpleNamespace(cells=cells, sample=sample)
+
+
+def test_blank_sample_renders_every_named_cell():
+    """A stale default of 8 silently dropped cells the viewer had listed."""
+    from ccf_glass_render.profile import RenderProfile
+
+    cells = _fake(*[f"N{i:03d}-1-SP" for i in range(1, 21)])
+    named = "+".join(list(cells)[:12])
+    assert len(app._select(cells, _args(named), RenderProfile())) == 12
+
+
+def test_blank_sample_with_no_named_cells_renders_all():
+    from ccf_glass_render.profile import RenderProfile
+
+    cells = _fake(*[f"N{i:03d}-1-SP" for i in range(1, 21)])
+    assert len(app._select(cells, _args(), RenderProfile())) == 20
+
+
+def test_an_explicit_sample_still_wins():
+    from ccf_glass_render.profile import RenderProfile
+
+    cells = _fake(*[f"N{i:03d}-1-SP" for i in range(1, 21)])
+    named = "+".join(list(cells)[:12])
+    assert len(app._select(cells, _args(named, 5), RenderProfile())) == 5
+
+
+def test_a_cleared_numeric_field_parses_as_unset():
+    """Argparse rejects '' for an int, which turned a cleared field into a
+    usage error that killed the run."""
+    assert app._blank(int)("") is None
+    assert app._blank(int)("  ") is None
+    assert app._blank(int)("8") == 8
+    assert app._blank(float)("1.15") == 1.15

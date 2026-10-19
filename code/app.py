@@ -36,6 +36,21 @@ def _log(message: str) -> None:
     print(message, flush=True)
 
 
+def _blank(cast):
+    """An argparse type that reads a cleared panel field as 'unset'.
+
+    A List or Input parameter the viewer empties arrives as "", which int()
+    rejects and argparse turns into a usage error -- so clearing a numeric
+    field killed the run rather than falling back to a default.
+    """
+
+    def parse(text: str):
+        text = (text or "").strip()
+        return None if text == "" else cast(text)
+
+    return parse
+
+
 def _csv(value: str | None) -> list[str]:
     """Split a multi-valued panel field.
 
@@ -231,7 +246,7 @@ def _render(args, views: list[str]) -> int:
                             cache_root / "views") if wanted else None)
         image = render_cells(brain, cells, profile, structures=overlay)
         written += save(image, RESULTS / f"{args.label}_{view}",
-                        dpi=args.dpi, formats=tuple(_csv(args.formats) or ("png", "svg")))
+                        dpi=args.dpi or 300, formats=tuple(_csv(args.formats) or ("png", "svg")))
         _log(f"  {view}  {image.shape[1]} x {image.shape[0]}")
 
     provenance.write(RESULTS / "provenance.json", sources, profile, views,
@@ -378,7 +393,7 @@ def _render_classes(args, views: list[str], by_class: dict, home: str) -> int:
         brain = load_view(view, args.resolution, root=views_root)
         image = render_cells(brain, cells, profile, colours=colours)
         written = save(image, RESULTS / f"{home}_classes_{view}",
-                       dpi=args.dpi, formats=formats)
+                       dpi=args.dpi or 300, formats=formats)
         _log(f"  {view}  {image.shape[1]} x {image.shape[0]}  -> {written[0].name}")
 
         # one figure per class as well: in a combined figure the dense classes
@@ -389,7 +404,7 @@ def _render_classes(args, views: list[str], by_class: dict, home: str) -> int:
                 continue
             image = render_cells(brain, only, profile, colours=colours)
             written = save(image, RESULTS / f"{home}_class{group}_{view}",
-                           dpi=args.dpi, formats=formats)
+                           dpi=args.dpi or 300, formats=formats)
             name = dict(CLASSES)[group]
             _log(f"  {view} class {group} ({name}, {len(only)} cells) "
                  f"-> {written[0].name}")
@@ -403,7 +418,7 @@ def _render_classes(args, views: list[str], by_class: dict, home: str) -> int:
             image = render_cells(brain, cells, profile, colours=colours,
                                  structures=overlay)
             written = save(image, RESULTS / f"{home}_classes_{view}_{acronym}",
-                           dpi=args.dpi, formats=formats)
+                           dpi=args.dpi or 300, formats=formats)
             _log(f"  {view} + {acronym}  -> {written[0].name}")
     return 0
 
@@ -490,8 +505,14 @@ def _select(cells: dict, args, profile) -> dict:
         if missing:
             _log(f"warning: not in the attached assets: {sorted(missing)}")
         cells = {k: v for k, v in cells.items() if k in wanted}
-    if args.sample and args.sample < len(cells):
-        keep = random.Random(profile.skeleton.seed).sample(sorted(cells), args.sample)
+    # an empty "sample" means "however many were asked for": every named cell
+    # when ids were given, otherwise every cell in the asset. Trimming a named
+    # list to a stale default silently dropped cells the viewer had chosen.
+    limit = args.sample
+    if limit is None:
+        limit = len(wanted) if named else 0
+    if limit and limit < len(cells):
+        keep = random.Random(profile.skeleton.seed).sample(sorted(cells), limit)
         cells = {k: cells[k] for k in keep}
     return cells
 
@@ -588,7 +609,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--views", default="sagittal,iso")
     parser.add_argument("--resolution", type=float, default=10.0)
     parser.add_argument("--colors", default="")
-    parser.add_argument("--thickness", type=float, default=0.0)
+    parser.add_argument("--thickness", type=_blank(float), default=0.0)
     # the panel may name this cell_morphology_type; both spellings bind here so
     # renaming the App Panel parameter cannot silently stop reaching the script
     parser.add_argument("--compartment", "--cell-morphology-type",
@@ -601,10 +622,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--subject", default="",
                         help="subject id(s) to render when several assets are "
                              "mounted, e.g. 720165")
-    parser.add_argument("--sample", type=int, default=0)
-    parser.add_argument("--seed", type=int, default=None)
+    parser.add_argument("--sample", type=_blank(int), default=None)
+    parser.add_argument("--seed", type=_blank(int), default=None)
     parser.add_argument("--label", default="cells")
-    parser.add_argument("--dpi", type=int, default=300)
+    parser.add_argument("--dpi", type=_blank(int), default=300)
     parser.add_argument("--formats", default="png,svg")
     parser.add_argument("--profile", default="")
     parser.add_argument("--asset", default="",
