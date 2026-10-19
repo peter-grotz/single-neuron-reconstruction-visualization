@@ -91,3 +91,40 @@ def test_canvas_grows_to_hold_cells_outside_the_brain(monkeypatch):
     # transposed on return, so the long axis is width
     assert image.shape[1] > 40, "canvas should have grown past the brain"
     assert image.shape[0] > 30
+
+
+def test_cells_are_not_dimmed_by_a_structure():
+    """A process crossing a structure boundary must not change brightness.
+
+    Attenuating the part behind an overlay read as the cell fading rather
+    than as depth, so the same cell is rendered identically with and without
+    the overlay in front of it.
+    """
+    import numpy as np
+
+    from ccf_glass_render.cache import BrainView, StructureView
+    from ccf_glass_render.figure import render_cells
+    from ccf_glass_render.skeletons import Neuron
+
+    brain = BrainView(
+        base=np.ones((40, 40, 3), np.float32), rotation=np.eye(3),
+        centre_in=np.zeros(3), centre_out=np.zeros(3),
+        resolution_um=10.0, view="sagittal")
+    cell = Neuron("N001-1", np.array([[100.0, 100.0, 50.0], [250.0, 250.0, 50.0]]),
+                  np.array([-1, 1]), np.array([1, 2]), np.array([2, 2]))
+    cells = {"N001-1": [cell]}
+    colours = {"N001-1": np.array([1.0, 0.0, 0.0], np.float32)}
+
+    # an overlay sitting entirely in front of the cell, fully opaque to it
+    overlay = StructureView(
+        rgb=np.zeros((40, 40, 3), np.float32), alpha=np.zeros((40, 40), np.float32),
+        front=np.zeros((40, 40), np.float32),
+        transmittance=np.zeros((40, 40), np.float32),
+        acronyms=("X",), view="sagittal", resolution_um=10.0)
+
+    plain = render_cells(brain, cells, RenderProfile(), colours=colours)
+    over = render_cells(brain, cells, RenderProfile(), colours=colours,
+                        structures=overlay)
+    ink_plain = (plain.min(axis=2) < 0.9).sum()
+    ink_over = (over.min(axis=2) < 0.9).sum()
+    assert ink_plain == ink_over, "the structure changed how much cell was drawn"

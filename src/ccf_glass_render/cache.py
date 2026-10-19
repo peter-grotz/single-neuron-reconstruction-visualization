@@ -261,27 +261,49 @@ def build_structures(view: str, resolution_um: float, acronyms: list[str],
 
 def _shade_structure(field: np.ndarray, tint: np.ndarray, opacity: float,
                      voxel_um: float, scale: float) -> dict[str, np.ndarray]:
-    """Soft shading of a structure's near surface, plus its depth and opacity."""
+    """Shade a structure's near surface, plus its depth and opacity.
+
+    The surface is solved the way the glass shell's is -- sub-voxel depth and
+    real normals -- because the earlier shortcut showed. Depth came from an
+    integer argmax, so on a structure only tens of voxels thick the shading
+    terraced in visible bands, and the alpha was clipped to saturation, which
+    left 93% of MD's pixels at one value and a stepped silhouette.
+
+    The shading itself is a lit solid rather than glass: the structure sits
+    inside the shell, and a second dielectric treatment makes the two surfaces
+    compete rather than reading as one body seen through another.
+    """
+    from .glass import _surface_normals
+
     height, width, depth = field.shape
     thickness_mm = field.sum(axis=2) * voxel_um / 1000.0
     inside = field > 0.5
     hit = inside.any(axis=2)
-    first = np.argmax(inside, axis=2).astype(np.float32)
+    first = np.argmax(inside, axis=2)
     del inside
 
     rows, cols = np.meshgrid(np.arange(height), np.arange(width), indexing="ij")
-    peak = field.max(axis=2)
-    coverage = ndi.gaussian_filter(np.clip((peak - 0.3) / 0.35, 0, 1) * hit, 0.8 * scale)
 
-    # shape reads from a shallow relief of the near surface rather than a full
-    # normal solve; the structure is a secondary cue, not the subject
-    relief = ndi.gaussian_filter(np.where(hit, first, np.nan_to_num(first.max())), 1.5 * scale)
-    d_row, d_col = np.gradient(relief)
-    lit = np.clip(0.72 + 0.9 * (-0.5 * d_row - 0.3 * d_col) / (1.0 + scale), 0.45, 1.25)
+    # where the smoothed field actually crosses 0.5, between two voxels
+    below = np.clip(first - 1, 0, depth - 1)
+    low = field[rows, cols, below]
+    high = field[rows, cols, first]
+    gap = high - low
+    frac = np.where(np.abs(gap) > 1e-6, (0.5 - low) / np.where(np.abs(gap) > 1e-6, gap, 1.0), 0.0)
+    front = np.where(hit, first - 1 + np.clip(frac, 0, 1), np.inf).astype(np.float32)
 
-    rgb = np.clip(tint[None, None, :] * lit[..., None], 0, 1).astype(np.float32)
+    normal = _surface_normals(field, first, rows, cols, 1.0 * scale)
+    key = np.array([-0.35, -0.86, -0.38])
+    key = key / np.linalg.norm(key)
+    lambert = np.clip(normal @ key, 0, 1)
+    facing = np.clip(np.abs(normal @ np.array([0.0, 0.0, 1.0])), 0, 1)
+    rim = (1.0 - facing) ** 3
+    lit = 0.55 + 0.55 * lambert + 0.25 * rim
+    rgb = np.clip(tint[None, None, :] * lit[..., None] + 0.10 * rim[..., None],
+                  0, 1).astype(np.float32)
+
+    # coverage from the smoothed field, so the edge is a gradient not a step
+    coverage = ndi.gaussian_filter(np.clip(field.max(axis=2), 0, 1) * hit, 0.5 * scale)
     alpha = (coverage * opacity).astype(np.float32)
-    front = np.where(hit, first, np.inf).astype(np.float32)
-    # a neuron seen through the structure keeps this much of its colour
     transmittance = np.exp(-1.6 * opacity * thickness_mm).astype(np.float32)
     return {"rgb": rgb, "alpha": alpha, "front": front, "transmittance": transmittance}

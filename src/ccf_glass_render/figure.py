@@ -100,15 +100,11 @@ def render_cells(brain: BrainView, cells: dict[str, list[Neuron]],
                 (splat.densify(pixels, neuron.parent, neuron.node_id,
                                step=max(radius * 0.5, 0.45)), rgb))
 
+    # Cells are drawn at full strength everywhere, including over a structure.
+    # Attenuating the part of an axon that lies behind one made a single
+    # process change brightness as it crossed the boundary, which reads as the
+    # cell fading rather than as depth.
     behind = None
-    if structures is not None:
-        front = splat.smooth_up_scalar(structures.front, factor) * factor
-        through = splat.smooth_up_scalar(structures.transmittance, factor)
-        if any((pad_top, pad_left, pad_bottom, pad_right)):
-            pads = ((pad_top, pad_bottom), (pad_left, pad_right))
-            front = np.pad(front, pads, constant_values=np.inf)
-            through = np.pad(through, pads, constant_values=1.0)
-        behind = (front, through)
     image = splat.composite(base, items, sup, radius,
                             profile.skeleton.shade_mix, profile.skeleton.alpha_gain,
                             behind=behind)
