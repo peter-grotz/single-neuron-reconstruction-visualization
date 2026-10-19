@@ -14,6 +14,6 @@ ENV PYTHONUNBUFFERED=1 \
     MPLBACKEND=Agg \
     PIP_NO_CACHE_DIR=1
 
-ARG RENDERER_REF=2d90935ebcbe8c0592bba281b573dbbdb5f93394
+ARG RENDERER_REF=d1bc68f3921aaf420f5719b31d2e527f69cb9fb3
 RUN pip install --no-cache-dir \
     "ccf-glass-render @ git+https://github.com/peter-grotz/single-neuron-reconstruction-visualization.git@${RENDERER_REF}"
