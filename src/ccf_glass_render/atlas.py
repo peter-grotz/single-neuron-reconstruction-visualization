@@ -199,6 +199,43 @@ def build_affine(shape: tuple[int, ...], yaw: float, pitch: float):
     return rot, centre_in, (out_shape - 1) / 2.0, tuple(int(v) for v in out_shape)
 
 
+def rotate_region(vol: np.ndarray, rot, centre_in, centre_out, out_shape,
+                  threshold: float = 0.01) -> np.ndarray:
+    """Rotate only the part of `vol` that holds anything.
+
+    A structure occupies a fraction of a percent of the atlas -- MD is 0.33%
+    by bounding box -- so resampling the whole 1.3-billion-voxel frame to
+    place it wastes essentially all of the work, and spilling that frame to a
+    memory-mapped file to afford it made a build take tens of minutes.
+
+    Both the source and the destination are cropped to the region that matters
+    and the result is pasted back, which keeps the arithmetic in RAM.
+    """
+    filled = np.argwhere(vol > threshold)
+    if not len(filled):
+        return np.zeros(out_shape, np.float32)
+    lo = filled.min(0)
+    hi = filled.max(0) + 1
+
+    # where that box lands once rotated, with a margin for interpolation
+    corners = np.array(np.meshgrid(*zip(lo, hi, strict=True))).reshape(3, -1).T
+    seen = (rot @ (corners - centre_in).T).T + centre_out
+    out_lo = np.maximum(np.floor(seen.min(0)).astype(int) - 2, 0)
+    out_hi = np.minimum(np.ceil(seen.max(0)).astype(int) + 2, np.array(out_shape))
+
+    inv = rot.T
+    # output index o maps to input inv @ o + offset; cropping either end just
+    # shifts that offset
+    offset = centre_in - inv @ centre_out + inv @ out_lo - lo
+    patch = ndi.affine_transform(
+        vol[lo[0]:hi[0], lo[1]:hi[1], lo[2]:hi[2]], inv, offset=offset,
+        output_shape=tuple(out_hi - out_lo), order=1, cval=0.0)
+
+    out = np.zeros(out_shape, np.float32)
+    out[out_lo[0]:out_hi[0], out_lo[1]:out_hi[1], out_lo[2]:out_hi[2]] = patch
+    return out
+
+
 def rotate(vol: np.ndarray, rot, centre_in, centre_out, out_shape, out=None) -> np.ndarray:
     """Resample `vol` into the rotated frame, optionally into a given array."""
     inv = rot.T

@@ -238,10 +238,14 @@ def build_structures(view: str, resolution_um: float, acronyms: list[str],
 
     rot, centre_in, centre_out, out_shape = atlas.build_affine(field.shape, yaw, pitch)
     pad = max(int(PAD_FRACTION * out_shape[1]), 12)
-    vol = _memmap(scratch, "structure", (out_shape[0], out_shape[1] + pad, out_shape[2]))
-    atlas.rotate(field, rot, centre_in, centre_out, out_shape,
-                 out=vol[:, : out_shape[1], :])
-    vol.flush()
+    padded = (out_shape[0], out_shape[1] + pad, out_shape[2])
+    # Only the part of the frame the structure occupies is resampled, and the
+    # result stays in RAM. Rotating the whole frame into a memory-mapped file
+    # -- which the brain needs, because it fills the frame -- turned a build
+    # that should take seconds into tens of minutes of disk writes.
+    vol = np.zeros(padded, np.float32)
+    vol[:, : out_shape[1], :] = atlas.rotate_region(
+        field, rot, centre_in, centre_out, out_shape)
     del field
     gc.collect()
 

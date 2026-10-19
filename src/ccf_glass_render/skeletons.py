@@ -155,6 +155,29 @@ def load_cells(paths: list[str | Path], compartment: Compartment = Compartment.A
     return out
 
 
+def read_soma(path: str | Path, scan: int = 4000) -> np.ndarray | None:
+    """The soma position alone, without parsing the whole reconstruction.
+
+    SWC convention puts the root first, so filtering by where a soma sits can
+    read a couple of kilobytes instead of the tens of megabytes a full axon
+    occupies. Falls back to a complete read if no root turns up early, rather
+    than reporting a cell has no soma.
+    """
+    path = Path(path)
+    with path.open() as handle:
+        for n, line in enumerate(handle):
+            if n > scan:
+                break
+            if not line.strip() or line.lstrip().startswith("#"):
+                continue
+            f = line.split()
+            if int(f[6]) == -1:
+                return np.array([float(f[2]), float(f[3]), float(f[4])])
+    neuron = read_swc(path)
+    soma = neuron.soma
+    return soma[0] if len(soma) else None
+
+
 def find_swc(root: str | Path) -> list[Path]:
     """Every ``.swc`` under `root`, recursively, in a stable order."""
     return sorted(Path(root).rglob("*.swc"))

@@ -23,6 +23,7 @@ import os
 import re
 import shutil
 import sys
+import types
 from pathlib import Path
 
 DATA = Path("/data")
@@ -230,8 +231,12 @@ def _render(args, views: list[str]) -> int:
         _log(f"{source.asset_name}: {len(source.files)} swc files")
 
     profile = _profile(args)
-    cells = load_cells([p for s in sources for p in s.files],
-                       Compartment(args.compartment))
+    paths = [p for s in sources for p in s.files]
+    # Decide which cells to draw from the filenames, then parse only those.
+    # Parsing an asset in full to render a sample of it cost about seven
+    # seconds for a 164-cell subject, every run.
+    paths = _narrow(paths, args, profile)
+    cells = load_cells(paths, Compartment(args.compartment))
     cells = _by_soma(cells, args)
     cells = _select(cells, args, profile)
     if not cells:
@@ -422,6 +427,60 @@ def _render_classes(args, views: list[str], by_class: dict, home: str) -> int:
                            dpi=args.dpi or 300, formats=formats)
             _log(f"  {view} + {acronym}  -> {written[0].name}")
     return 0
+
+
+def _narrow(paths: list, args, profile) -> list:
+    """Drop files that cannot be in the figure, before any of them are parsed.
+
+    Only safe when the choice is knowable from the filename: an explicit id
+    list, or a seeded sample with no soma filter. A soma filter needs every
+    cell's root node, so nothing can be skipped there.
+    """
+    import random
+
+    from ccf_glass_render.skeletons import cell_id
+
+    by_cell: dict[str, list] = {}
+    for path in paths:
+        by_cell.setdefault(cell_id(path), []).append(path)
+
+    named = _csv(args.cells)
+    if named:
+        keep = set()
+        for name in named:
+            keep.update(c for c in by_cell if c == name or c.startswith(name + "-"))
+        if keep:
+            return [p for c in sorted(keep) for p in by_cell[c]]
+        return paths
+
+    home = (args.soma_region or "").strip()
+    if home:
+        # only the root node of each file is needed, which is a couple of
+        # kilobytes rather than the tens of megabytes an axon occupies
+        from ccf_glass_render.classify import load_division_volume, soma_division
+        from ccf_glass_render.skeletons import read_soma
+
+        volume, names = load_division_volume(_cache_root(args.cache))
+        keep = []
+        for cell, group in by_cell.items():
+            spot = next((s for s in (read_soma(f) for f in group) if s is not None), None)
+            if spot is None:
+                keep.append(cell)          # cannot tell; let the full read decide
+                continue
+            holder = types.SimpleNamespace(soma=spot[None, :])
+            if soma_division(holder, volume, names) == home:
+                keep.append(cell)
+        _log(f"soma in {home}: {len(keep)} of {len(by_cell)} cells")
+        paths = [p for c in sorted(keep) for p in by_cell[c]]
+        by_cell = {c: by_cell[c] for c in keep}
+        if not by_cell:
+            return paths
+
+    limit = args.sample
+    if limit and limit < len(by_cell):
+        chosen = random.Random(profile.skeleton.seed).sample(sorted(by_cell), limit)
+        return [p for c in sorted(chosen) for p in by_cell[c]]
+    return paths
 
 
 def _by_soma(cells: dict, args) -> dict:
