@@ -75,3 +75,15 @@ def test_a_view_alias_names_the_same_cache_file(tmp_path):
 
     assert (structure_cache_path("saggital", 10.0, ["TH"], tmp_path)
             == structure_cache_path("sagittal", 10.0, ["TH"], tmp_path))
+
+
+def test_several_structures_cache_as_one_region(tmp_path):
+    """Passing only the first of a list silently dropped the rest, which is
+    what the on-demand overlay path used to do."""
+    from ccf_glass_render.cache import structure_cache_path
+
+    both = structure_cache_path("sagittal", 10.0, ["TH", "MD"], tmp_path)
+    assert both.name == "sagittal_10um_struct_MD-TH.npz"
+    # order of request must not matter
+    assert structure_cache_path("sagittal", 10.0, ["MD", "TH"], tmp_path) == both
+    assert both != structure_cache_path("sagittal", 10.0, ["TH"], tmp_path)

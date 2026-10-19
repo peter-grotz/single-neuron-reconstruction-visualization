@@ -264,7 +264,7 @@ def _render(args, views: list[str]) -> int:
     written = []
     for view in views:
         brain = load_view(view, args.resolution, root=cache_root / "views")
-        overlay = (_overlay(view, args.resolution, wanted[0],
+        overlay = (_overlay(view, args.resolution, wanted,
                             cache_root / "views") if wanted else None)
         image = render_cells(brain, cells, profile, structures=overlay)
         written += save(image, RESULTS / f"{args.label}_{view}",
@@ -433,7 +433,7 @@ def _render_classes(args, views: list[str], by_class: dict, home: str) -> int:
 
         for acronym in wanted:
             try:
-                overlay = _overlay(view, args.resolution, acronym, views_root)
+                overlay = _overlay(view, args.resolution, [acronym], views_root)
             except (KeyError, ValueError) as exc:
                 _log(f"  {view} + {acronym}: skipped -- {exc.args[0][:70]}")
                 continue
@@ -548,28 +548,33 @@ def _scratch() -> Path:
         return Path(os.environ["CCF_CACHE"]) / "scratch"
 
 
-def _overlay(view: str, resolution: float, acronym: str, views_root: Path):
+def _overlay(view: str, resolution: float, acronyms: list[str], views_root: Path):
     """Load a structure overlay, building it if the cache does not have one.
 
-    A cache mount is read-only and only ever holds the structures someone
-    thought to pre-build, so any other region was simply unavailable. Building
-    on demand costs about a minute and writes to the writable cache, which
-    means any of the 1327 CCF structures can be drawn.
+    Takes the whole list: several structures are drawn as one region in one
+    colour, which is how the cache names and stores them. Passing only the
+    first silently dropped the rest, which is what this used to do.
+
+    A cache mount is read-only and only holds the structures someone thought
+    to pre-build, so anything else was unavailable. Building on demand takes
+    about 47 s and writes to the writable cache, which means any of the 1327
+    CCF structures can be drawn.
     """
     from ccf_glass_render.cache import build_structures, load_structures
 
+    names = list(acronyms)
     try:
-        return load_structures(view, resolution, [acronym], root=views_root)
+        return load_structures(view, resolution, names, root=views_root)
     except FileNotFoundError:
         pass
     local = Path(os.environ["CCF_CACHE"]) / "views"
     try:
-        return load_structures(view, resolution, [acronym], root=local)
+        return load_structures(view, resolution, names, root=local)
     except FileNotFoundError:
-        _log(f"  building {acronym} for {view}; not in the cache")
-        build_structures(view, resolution, [acronym], root=local,
+        _log(f"  building {'+'.join(names)} for {view}; not in the cache")
+        build_structures(view, resolution, names, root=local,
                          scratch=_scratch() / "struct")
-        return load_structures(view, resolution, [acronym], root=local)
+        return load_structures(view, resolution, names, root=local)
 
 
 def _profile(args):
