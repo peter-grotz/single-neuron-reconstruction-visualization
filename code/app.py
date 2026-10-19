@@ -549,29 +549,25 @@ def _scratch() -> Path:
 
 
 def _overlay(view: str, resolution: float, acronyms: list[str], views_root: Path):
-    """Load a structure overlay, building it if the cache does not have one.
+    """Build a structure overlay for this run, reusing it across views only.
 
-    Takes the whole list: several structures are drawn as one region in one
-    colour, which is how the cache names and stores them. Passing only the
-    first silently dropped the rest, which is what this used to do.
+    Overlays are deliberately not read from the cache asset. They store shaded
+    RGB, so a cached one carries whatever material was current when it was
+    built, and a change to the shading silently does not appear -- which is
+    exactly what happened when the material was reworked. Building takes about
+    47 s per structure per view, which is worth paying to have the render
+    always match the code.
 
-    A cache mount is read-only and only holds the structures someone thought
-    to pre-build, so anything else was unavailable. Building on demand takes
-    about 47 s and writes to the writable cache, which means any of the 1327
-    CCF structures can be drawn.
+    `views_root` is accepted and ignored, so callers do not have to know this.
     """
     from ccf_glass_render.cache import build_structures, load_structures
 
     names = list(acronyms)
-    try:
-        return load_structures(view, resolution, names, root=views_root)
-    except FileNotFoundError:
-        pass
     local = Path(os.environ["CCF_CACHE"]) / "views"
     try:
         return load_structures(view, resolution, names, root=local)
     except FileNotFoundError:
-        _log(f"  building {'+'.join(names)} for {view}; not in the cache")
+        _log(f"  building {'+'.join(names)} for {view}")
         build_structures(view, resolution, names, root=local,
                          scratch=_scratch() / "struct")
         return load_structures(view, resolution, names, root=local)

@@ -261,3 +261,41 @@ def test_other_structures_survive_alongside_root():
     assert app._structures("root+MD") == ["MD"]
     assert app._structures("MD") == ["MD"]
     assert app._structures("") == []
+
+
+def test_overlays_are_not_read_from_the_cache_asset(tmp_path, monkeypatch):
+    """A cached overlay stores shaded RGB, so it carries whatever material was
+    current when it was built -- a shading change then silently does not show.
+    """
+    import numpy as np
+
+    from ccf_glass_render.cache import StructureView
+
+    cache_root = tmp_path / "asset" / "views"
+    cache_root.mkdir(parents=True)
+    (cache_root / "sagittal_10um_struct_TH.npz").write_bytes(b"stale")
+
+    local = tmp_path / "writable"
+    monkeypatch.setenv("CCF_CACHE", str(local))
+
+    built = {}
+
+    def fake_build(view, res, names, root, scratch):
+        built["called"] = (view, tuple(names))
+        (Path(root)).mkdir(parents=True, exist_ok=True)
+
+    def fake_load(view, res, names, root):
+        if "asset" in str(root):
+            raise AssertionError("read the cache asset instead of building")
+        if "called" not in built:
+            raise FileNotFoundError("not built yet")
+        return StructureView(
+            rgb=np.zeros((2, 2, 3), np.float32), alpha=np.zeros((2, 2), np.float32),
+            front=np.zeros((2, 2), np.float32),
+            transmittance=np.ones((2, 2), np.float32),
+            acronyms=tuple(names), view=view, resolution_um=res)
+
+    monkeypatch.setattr("ccf_glass_render.cache.build_structures", fake_build)
+    monkeypatch.setattr("ccf_glass_render.cache.load_structures", fake_load)
+    app._overlay("sagittal", 10.0, ["TH"], cache_root)
+    assert built["called"] == ("sagittal", ("TH",))
