@@ -203,3 +203,46 @@ def test_a_cleared_numeric_field_parses_as_unset():
     assert app._blank(int)("  ") is None
     assert app._blank(int)("8") == 8
     assert app._blank(float)("1.15") == 1.15
+
+
+class _Neuron:
+    def __init__(self, xyz):
+        import numpy as np
+
+        self.xyz = np.array(xyz, float)
+        self.soma = self.xyz[:1]
+
+    def __len__(self):
+        return len(self.xyz)
+
+
+def test_soma_region_filters_and_named_cells_survive(monkeypatch):
+    """Naming a cell is a direct instruction; the region filter must not
+    silently discard it."""
+    import types
+
+    import numpy as np
+
+    volume = np.zeros((10, 10, 10), np.uint8)
+    volume[0, 0, 0] = 2          # code 2 -> MY
+    volume[5, 5, 5] = 1          # code 1 -> CB
+    names = {1: "CB", 2: "MY"}
+    monkeypatch.setattr(
+        "ccf_glass_render.classify.load_division_volume",
+        lambda root, down=2: (volume, names))
+
+    cells = {"N001-1-AA": [_Neuron([[0, 0, 0]])],        # soma in MY
+             "N002-1-BB": [_Neuron([[100, 100, 100]])]}  # soma in CB
+    args = types.SimpleNamespace(soma_region="MY", cells="", cache="")
+    assert sorted(app._by_soma(dict(cells), args)) == ["N001-1-AA"]
+
+    args = types.SimpleNamespace(soma_region="MY", cells="N002-1", cache="")
+    assert sorted(app._by_soma(dict(cells), args)) == ["N001-1-AA", "N002-1-BB"]
+
+
+def test_blank_soma_region_keeps_everything():
+    import types
+
+    cells = {"N001-1-AA": [], "N002-1-BB": []}
+    args = types.SimpleNamespace(soma_region="", cells="", cache="")
+    assert app._by_soma(dict(cells), args) == cells

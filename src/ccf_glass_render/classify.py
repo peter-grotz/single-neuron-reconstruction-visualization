@@ -226,6 +226,22 @@ def load_division_volume(root: Path, down: int = DIVISION_DOWN):
     return np.load(fallback, mmap_mode="r"), names
 
 
+def soma_division(neuron: Neuron, volume, names: dict[int, str],
+                  down: int = DIVISION_DOWN) -> str | None:
+    """Which major division a cell's soma sits in.
+
+    Just the soma lookup, without measuring the axon -- filtering a few
+    hundred cells by where their somata are should not cost a full projection
+    measurement each.
+    """
+    soma = neuron.soma
+    if not len(soma):
+        return None
+    voxel = atlas.VOXEL_UM * down
+    idx = np.clip((soma[0] / voxel).astype(int), 0, np.array(volume.shape) - 1)
+    return names.get(int(volume[idx[0], idx[1], idx[2]]))
+
+
 def _division_lookup() -> dict[int, str]:
     """Map every CCF label to the major division containing it."""
     out: dict[int, str] = {}

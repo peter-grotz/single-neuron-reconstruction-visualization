@@ -232,6 +232,7 @@ def _render(args, views: list[str]) -> int:
     profile = _profile(args)
     cells = load_cells([p for s in sources for p in s.files],
                        Compartment(args.compartment))
+    cells = _by_soma(cells, args)
     cells = _select(cells, args, profile)
     if not cells:
         _log("error: no cells selected")
@@ -421,6 +422,43 @@ def _render_classes(args, views: list[str], by_class: dict, home: str) -> int:
                            dpi=args.dpi or 300, formats=formats)
             _log(f"  {view} + {acronym}  -> {written[0].name}")
     return 0
+
+
+def _by_soma(cells: dict, args) -> dict:
+    """Keep cells whose soma sits in the requested division.
+
+    A cell named explicitly in the id list is kept regardless: naming a cell
+    is a direct instruction, and silently dropping it for sitting outside the
+    region would be the wrong reading of it.
+    """
+    home = (args.soma_region or "").strip()
+    if not home or not cells:
+        return cells
+
+    from ccf_glass_render.classify import load_division_volume, soma_division
+
+    named = set()
+    for name in _csv(args.cells):
+        named.update(k for k in cells if k == name or k.startswith(name + "-"))
+
+    volume, names = load_division_volume(_cache_root(args.cache))
+    kept, elsewhere = {}, {}
+    for cid, neurons in cells.items():
+        if cid in named:
+            kept[cid] = neurons
+            continue
+        where = soma_division(max(neurons, key=len), volume, names)
+        if where == home:
+            kept[cid] = neurons
+        else:
+            elsewhere[cid] = where
+    _log(f"soma in {home}: {len(kept)} of {len(cells)} cells"
+         + (f" ({len(named)} kept by name)" if named else ""))
+    if not kept:
+        import collections
+        seen = collections.Counter(v for v in elsewhere.values() if v)
+        _log(f"error: no cell has its soma in {home}. Present: {dict(seen)}")
+    return kept
 
 
 def _scratch() -> Path:
